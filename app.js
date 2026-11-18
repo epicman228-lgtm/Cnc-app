@@ -604,9 +604,16 @@
   // Rangordna fräsar mot avläst text. Lägre poäng = bättre.
   function matchText(text) {
     const flat = normCode(text);
-    const tokens = String(text).split(/[\s|,;:]+/).map(normCode).filter((t) => t.length >= 3);
-    const cands = new Set(tokens);
-    for (let i = 0; i < tokens.length - 1; i++) cands.add(tokens[i] + tokens[i + 1]);
+    const tokens = String(text).split(/[\s|,;:]+/).map(normCode).filter(Boolean).slice(0, 400);
+    const cands = new Set(tokens.filter((t) => t.length >= 3));
+    // Koden kan vara uppdelad på flera ord: prova följder av 2–6 ord, ihopskrivna och med bindestreck
+    for (let i = 0; i < tokens.length; i++) {
+      for (let k = 2; k <= 6 && i + k <= tokens.length; k++) {
+        const part = tokens.slice(i, i + k);
+        cands.add(part.join(""));
+        cands.add(part.join("-"));
+      }
+    }
     return TOOLS.map((t) => {
       const c = normCode(t.code);
       if (flat.includes(c)) return { t, score: 0 };

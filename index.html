@@ -108,6 +108,8 @@ h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; lette
 }
 .finder-out { display: grid; gap: 8px; min-width: 0; }
 .finder-out:empty { display: none; }
+.finder-out:has(> .thumb) { grid-template-columns: 52px minmax(0, 1fr); align-items: center; column-gap: 12px; }
+.finder-out > .cands, .finder-out > .note, .finder-out > .f-status ~ .f-status { grid-column: 1 / -1; }
 .f-status { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 0; min-width: 0; }
 .f-status.bad { color: var(--bad); }
 .f-status.good { color: var(--good); font-weight: 600; }
@@ -336,7 +338,7 @@ footer.src p { margin: 0; }
             Fota etiketten
           </label>
           <input id="photo" class="vh" type="file" accept="image/*">
-          <input id="code-search" type="search" placeholder="Artikelkod, t.ex. UC-2F-D4.0" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Sök artikelkod">
+          <input id="code-search" type="search" placeholder="Skriv kod" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Sök artikelkod">
         </div>
         <div class="finder-out" id="finder-out" aria-live="polite"></div>
       </div>
