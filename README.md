@@ -23,6 +23,20 @@ I den publicerade Claude-versionen läser Claude bilden. Som fristående sida an
 Matning = chipload × antal skär × varvtal. Nedmatning, skärdjup per pass och stegöver tas från databasen.
 Förslagen för adaptiv fräsning och finpass är tumregler, inte databasvärden, och är märkta så i appen.
 
+## Android-app (.apk)
+
+`dist/frasmatning.apk` är appen som en vanlig Android-app (Android 6 eller nyare). Den fungerar offline
+och "Fota etiketten" öppnar kameran eller bildgalleriet.
+
+1. Ladda ner `dist/frasmatning.apk` till telefonen (från GitHub: öppna filen och tryck *Download raw file*).
+2. Öppna filen. Android frågar om du vill tillåta installation från den här källan (webbläsaren eller
+   Filer-appen): tillåt det och installera.
+3. Play Protect kan varna för att appen kommer från en okänd utvecklare. Välj *Installera ändå*.
+
+Bygg om med `scripts/build_apk.sh` (kräver `aapt apksigner dalvik-exchange android-sdk-platform-23 zipalign`
+och en JDK). Signeringsnyckeln `android/release.keystore` skapas första gången och checkas inte in. En app
+signerad med en annan nyckel kan inte installeras ovanpå den gamla; avinstallera den gamla först.
+
 ## Installera som app på mobilen
 
 Appen är en installerbar webbapp (PWA) och fungerar offline efter första besöket.

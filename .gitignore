@@ -1,3 +1,5 @@
 *.vtdb-shm
 *.vtdb-wal
 __pycache__/
+android/build/
+android/release.keystore
