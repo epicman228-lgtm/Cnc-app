@@ -11,9 +11,9 @@ I den publicerade Claude-versionen läser Claude bilden. Som fristående sida an
 (OCR i webbläsaren, laddas från cdn.jsdelivr.net vid första fotot). Sökfältet fungerar överallt.
 
 1. **Material** – hårt trä, mjukt trä/plywood, MDF, melamin, akryl, hård plast, mjuk plast, aluminium, FR4/PCB, ACM.
-2. **Typ av fräs** – upcut, downcut, V-bit, kulfräs, konisk radiefräs, kompression, notfräs,
+2. **Typ av fräs** – upcut, downcut, V-bit, kulfräs, konisk kulfräs, kompression, notfräs,
    avrundning, planfräs, kopierfräs, PCB-fräs och V-spår för ACM. Typer som saknar data för materialet gråas ut.
-3. **Fräsen** – diameter (för V-bit även vinkel och spetsbredd, för konisk radie och avrundning radien),
+3. **Fräsen** – diameter (för kulfräs även radien, för V-bit vinkel och spetsbredd, för konisk kulfräs spetsradien, för avrundning radien),
    antal skär och vid behov artikel/skärlängd.
 4. **Varvtal och matning** – varvtal och matning.
    Matningen följer varvtalet tills du skriver in en egen, sedan visar mätaren om chiploaden blir för låg eller för hög.

@@ -476,17 +476,21 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     { id: "upcut", label: "Upcut", sub: "Uppåtskärande", rows: ["d"], blurb: "Lyfter upp spånen ur spåret. Bra för djupa spår och fickor, men kan ge fransig överkant." },
     { id: "downcut", label: "Downcut", sub: "Nedåtskärande", rows: ["d"], blurb: "Trycker ner fibrerna och ger ren överkant. Spånen packas i spåret, så kör grundare pass." },
     { id: "vbit", label: "V-bit", sub: "Gravyr, V-carve", rows: ["d", "angle", "tip"], blurb: "Spetsig fräs för gravyr, V-carve och fasning. Välj vinkel och spetsbredd." },
-    { id: "ball", label: "Kulfräs", sub: "Ball nose", rows: ["d"], blurb: "Halvrund spets för 3D-relief och mjuka konturer. Radien är halva diametern." },
-    { id: "tapered", label: "Konisk radie", sub: "Tapered ball", rows: ["radius"], blurb: "Konisk kropp med rundad spets. Fina 3D-detaljer med en stabil fräs." },
+    { id: "ball", label: "Kulfräs", sub: "Ball nose", rows: ["d"], blurb: "Halvrund spets för 3D-relief och mjuka konturer. Radien är halva diametern.",
+      rowDefs: { d: { label: "Diameter och radie", fmt: (v) => `Ø${num(v)} · R${num(radiusFor("ball", v))}` } } },
+    { id: "tapered", label: "Konisk kulfräs", sub: "Tapered ball", rows: ["radius"], blurb: "Konisk kropp med rundad spets. Fina 3D-detaljer med en stabil fräs. Välj spetsradie.",
+      rowDefs: { radius: { label: "Spetsradie", fmt: (v) => `R${num(v)}` } } },
     { id: "compression", label: "Kompression", sub: "Upp + ned", rows: ["d"], blurb: "Uppåtskärande nertill och nedåtskärande upptill. Rena kanter på båda sidor av skivan." },
     { id: "straight", label: "Notfräs", sub: "Raka skär", rows: ["d"], blurb: "Raka skär för spår, fickor och kanter i trä och plast." },
-    { id: "roundover", label: "Avrundning", sub: "Kantradie", rows: ["radius"], blurb: "Rundar av kanter. Välj radie." },
+    { id: "roundover", label: "Avrundning", sub: "Kantradie", rows: ["radius"], blurb: "Rundar av kanter. Välj radie.",
+      rowDefs: { radius: { fmt: (v) => `R${num(v)}` } } },
     { id: "surfacing", label: "Planfräs", sub: "Spoilboard", rows: ["d"], blurb: "Bred fräs för att plana spoilboard och stora ytor." },
     { id: "flush", label: "Kopierfräs", sub: "Med lager", rows: ["d"], blurb: "Kopierfräs med lager som följer en mall." },
     { id: "pcb", label: "PCB-fräs", sub: "Majskolv", rows: ["d"], blurb: "Fräs för FR4 och kretskort." },
     { id: "acm", label: "V-spår ACM", sub: "Vikspår", rows: ["d"], blurb: "V-spår för att vika ACM- och Dibondskivor." },
   ];
   const TYPE = Object.fromEntries(TYPES.map((t) => [t.id, t]));
+  function radiusFor(type, d) { const t = TOOLS.find((x) => x.type === type && x.d === d); return t && t.radius != null ? t.radius : d / 2; }
 
   const ROWS = {
     d: { label: "Diameter", unit: "mm", get: (t) => t.d, fmt: (v) => num(v) },
@@ -753,7 +757,7 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     const box = $("dims");
     box.innerHTML = "";
     r.rows.forEach((row) => {
-      const def = ROWS[row.key];
+      const def = Object.assign({}, ROWS[row.key], (r.type.rowDefs || {})[row.key]);
       box.appendChild(seg(def.label, def.unit, row.opts.map((v) => ({ value: v, text: def.fmt(v), on: v === row.val })),
         (v) => { state.sel[row.key] = v; state.article = null; state.feedAuto = true; render(); }));
     });
@@ -772,7 +776,12 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
       })), (v) => { state.article = v; state.feedAuto = true; render(); }, "articles"));
     }
 
-    const hints = { vbit: "Diameter, vinkel och spetsbredd", tapered: "Spetsradie och antal skär", roundover: "Radie och antal skär" };
+    if (r.type.id === "tapered") {
+      const ds = uniq(r.cands.map((t) => t.d)).map((d) => `Ø${num(d)} mm`).join(", ");
+      const as = uniq(r.cands.map((t) => t.codeAngle)).map((a) => `${a}°`).join(", ");
+      box.appendChild(el("p", { class: "note" }, `Spetsradien är radien på den rundade toppen. Skaft ${ds}, konvinkel ${as}.`));
+    }
+    const hints = { vbit: "Diameter, vinkel och spetsbredd", ball: "Diameter, radie och antal skär", tapered: "Spetsradie och antal skär", roundover: "Radie och antal skär" };
     $("dim-hint").textContent = hints[r.type.id] || "Diameter (mm) och antal skär";
   }
 
@@ -848,15 +857,18 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
       ["Stegöver", `${num(cut.stepover, 2)} <small>mm</small>${stepPct}`],
       ["Varvtal", `${num(state.rpm, 0)} <small>rpm</small>`],
     ];
+    if (["ball", "tapered", "roundover"].includes(tool.type) && tool.radius != null) {
+      rows.unshift([tool.type === "roundover" ? "Radie" : "Spetsradie", `R${num(tool.radius)} <small>mm</small>`]);
+    }
     $("kv").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 
     const details = [tool.group];
     if (tool.len) details.push(`skärlängd ${num(tool.len)} mm`);
-    if (tool.type === "ball") details.push(`radie ${num(tool.d / 2)} mm`);
-    if (tool.type === "tapered" && tool.codeAngle) details.push(`konvinkel ${tool.codeAngle}°`);
+    if (tool.type === "ball") details.push(`radie ${num(tool.radius != null ? tool.radius : tool.d / 2)} mm`);
+    if (tool.type === "tapered") details.push(`spetsradie ${num(tool.radius)} mm`, `Ø${num(tool.d)} mm skaft`, tool.codeAngle ? `konvinkel ${tool.codeAngle}°` : "");
     if (tool.type === "roundover") details.push(`Ø${num(tool.d)} mm`);
     if (tool.dlc) details.push("DLC-belagd");
-    $("article").innerHTML = TOOL_SVG[tool.type] + `<code>${tool.code}</code><span>${details.join(" · ")}</span>`;
+    $("article").innerHTML = TOOL_SVG[tool.type] + `<code>${tool.code}</code><span>${details.filter(Boolean).join(" · ")}</span>`;
 
     // Mobilfot
     $("dock-feed").textContent = num(c.feed, 0);
@@ -912,7 +924,8 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
 
   function toolShort(t) {
     if (t.type === "vbit") return `${t.angle}° V, Ø${num(t.d)} mm`;
-    if (t.type === "tapered") return `R${num(t.radius)} konisk`;
+    if (t.type === "tapered") return `R${num(t.radius)} konisk${t.codeAngle ? ` ${t.codeAngle}°` : ""}`;
+    if (t.type === "ball") return `Ø${num(t.d)} mm R${num(t.radius != null ? t.radius : t.d / 2)}`;
     if (t.type === "roundover") return `R${num(t.radius)} avrundning`;
     if (t.type === "acm") return `${t.codeAngle || t.angle}° V-spår`;
     return `${num(t.d)} mm`;
