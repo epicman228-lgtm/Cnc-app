@@ -217,9 +217,26 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 .article code { font: 700 15px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
 .article span { font-size: 13.5px; color: var(--muted); }
 
-.own { display: grid; gap: 10px; }
-.own-toggle { display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; }
-.own-toggle input { width: 20px; height: 20px; accent-color: var(--ink); }
+.field.wide { grid-column: 1 / -1; }
+@media (min-width: 460px) { .field.wide .stepper { max-width: calc(50% - 6px); } }
+.r-rec { margin: 8px 0 0; font-size: 14.5px; }
+.r-rec b { font-variant-numeric: tabular-nums; }
+
+.depth { display: grid; gap: 10px; }
+.depth-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.depth-big { font: 800 30px/1.05 var(--font-display); font-variant-numeric: tabular-nums; }
+.depth-big small { font: 500 16px var(--font-body); color: var(--muted); }
+.ops { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ops th { text-align: left; font: 600 12px/1.2 var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 0 0 6px; }
+.ops th:not(:first-child), .ops td:not(:first-child) { text-align: right; }
+.ops td { padding: 8px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+.ops td:first-child { padding-right: 10px; }
+.ops td b { font: 600 15px var(--font-display); }
+.ops .src { display: block; font-size: 12px; color: var(--muted); }
+.ops-wrap { overflow-x: auto; }
+.tips { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.tips b { color: var(--ink); font-weight: 600; }
+.warnline { color: var(--bad); font-weight: 600; font-size: 14px; margin: 0; }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .btn {
@@ -277,7 +294,7 @@ footer.src p { margin: 0; }
       </div>
 
       <div class="step">
-        <div class="step-head"><span class="step-no">4</span><h2>Maskin och varvtal</h2></div>
+        <div class="step-head"><span class="step-no">4</span><h2>Varvtal och matning</h2></div>
         <div class="machine">
           <div class="field">
             <label class="field-label" for="rpm">Varvtal (rpm)</label>
@@ -288,6 +305,14 @@ footer.src p { margin: 0; }
             </div>
           </div>
           <div class="field">
+            <label class="field-label" for="feedin">Matning (mm/min)</label>
+            <div class="stepper">
+              <button type="button" data-step="feed" data-dir="-1" aria-label="Sänk matning">−</button>
+              <input id="feedin" type="number" inputmode="numeric" min="50" max="30000" step="50">
+              <button type="button" data-step="feed" data-dir="1" aria-label="Höj matning">+</button>
+            </div>
+          </div>
+          <div class="field wide">
             <label class="field-label" for="maxfeed">Maskinens maxmatning (mm/min)</label>
             <div class="stepper">
               <button type="button" data-step="maxfeed" data-dir="-1" aria-label="Sänk maxmatning">−</button>
@@ -297,6 +322,25 @@ footer.src p { margin: 0; }
           </div>
         </div>
         <p class="note" id="rpm-note"></p>
+        <p class="note" id="feed-note"></p>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">5</span><h2>Skärdjup</h2><span class="step-hint">Hur djupt ska du fräsa totalt?</span></div>
+        <div class="machine">
+          <div class="field">
+            <label class="field-label" for="depth">Totalt djup (mm)</label>
+            <div class="stepper">
+              <button type="button" data-step="depth" data-dir="-1" aria-label="Minska djup">−</button>
+              <input id="depth" type="number" inputmode="decimal" min="0.1" max="100" step="0.5">
+              <button type="button" data-step="depth" data-dir="1" aria-label="Öka djup">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">Snabbval</span>
+            <div class="seg" id="depth-presets" role="group" aria-label="Snabbval för djup"></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -306,6 +350,7 @@ footer.src p { margin: 0; }
           <div class="r-label">Matning</div>
           <div class="feed"><span class="feed-num" id="feed">–</span><span class="feed-unit">mm/min</span></div>
           <p class="r-sub" id="summary"></p>
+          <p class="r-rec" id="rec-line" hidden></p>
         </div>
 
         <div class="gauge">
@@ -317,16 +362,9 @@ footer.src p { margin: 0; }
 
         <dl class="kv" id="kv"></dl>
 
-        <div class="article" id="article"></div>
+        <div class="depth" id="depth-out"></div>
 
-        <div class="own">
-          <label class="own-toggle"><input type="checkbox" id="own-on"> Kontrollera min egen matning</label>
-          <div class="stepper" id="own-wrap" hidden>
-            <button type="button" data-step="own" data-dir="-1" aria-label="Sänk egen matning">−</button>
-            <input id="own" type="number" inputmode="numeric" min="50" max="30000" step="50" aria-label="Egen matning i mm/min">
-            <button type="button" data-step="own" data-dir="1" aria-label="Höj egen matning">+</button>
-          </div>
-        </div>
+        <div class="article" id="article"></div>
 
         <div class="actions">
           <button type="button" class="btn" id="copy">Kopiera värden</button>

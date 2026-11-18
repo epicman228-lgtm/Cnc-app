@@ -51,12 +51,16 @@
   // ---------- State ----------
   const STORE_KEY = "frasmatning.v1";
   const state = Object.assign(
-    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, maxFeed: DEFAULT_MAXFEED, ownOn: false, own: null },
+    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, feed: null, feedAuto: true, maxFeed: DEFAULT_MAXFEED, depth: 6 },
     load()
   );
 
   function load() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+      delete s.ownOn; delete s.own;
+      return s;
+    } catch (e) { return {}; }
   }
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ingen lagring */ }
@@ -127,16 +131,69 @@
     const z = tool.flutes;
     const rpm = state.rpm;
     const rec = cut.chip;
-    const ideal = rec * z * rpm;
+    const ideal = rec * z * rpm;                       // matning för exakt rätt chipload
+    const recFeed = Math.round(Math.min(ideal, state.maxFeed));
     const capped = ideal > state.maxFeed;
-    const calcFeed = Math.round(Math.min(ideal, state.maxFeed));
-    const feed = state.ownOn && state.own ? state.own : calcFeed;
+    if (state.feedAuto || !state.feed) state.feed = recFeed;
+    const feed = state.feed;
     const chip = feed / (z * rpm);
     const ratio = chip / rec;
+    const zone = ratio < 0.8 ? 0 : ratio > 1.2 ? 2 : 1;
     const plunge = Math.round(feed * (cut.plunge / cut.feed));
-    const rpmForMax = Math.floor(state.maxFeed / (rec * z) / 100) * 100;
-    return { feed, calcFeed, ideal, capped, chip, rec, ratio, plunge, rpmForMax };
+    const rpmForFeed = (f) => Math.round(f / (rec * z) / 100) * 100;   // varvtal som ger rätt chipload vid matning f
+    return { feed, recFeed, ideal, capped, chip, rec, ratio, zone, plunge, rpmForFeed, overMax: feed > state.maxFeed };
   }
+
+  // ---------- Skärdjup ----------
+  // Tumregel för adaptiv/HSM-fräsning: djup i antal diametrar och stegöver i andel av diametern.
+  const HSM = {
+    hardwood: [1.0, 0.12], softwood: [1.5, 0.15], mdf: [1.5, 0.15], melamine: [1.5, 0.15],
+    acrylic: [1.0, 0.12], hardplastic: [1.0, 0.12], softplastic: [1.0, 0.15], aluminium: [0.5, 0.08],
+  };
+  const FLAT = ["upcut", "downcut", "compression", "straight"];
+
+  function depthPlan(r, c) {
+    const { tool, cut } = r;
+    const base = cut.stepdown;
+    // Högre chipload än rätt = större last per tand -> ta grundare pass i samma proportion.
+    const scale = c.ratio > 1.05 ? 1 / c.ratio : 1;
+    const ap = Math.max(0.05, Math.floor(base * scale * 100) / 100);
+    const total = state.depth;
+    const passes = Math.max(1, Math.ceil(total / ap - 1e-9));
+    const perPass = total / passes;
+    const ops = [];
+    if (FLAT.includes(tool.type)) {
+      ops.push({ name: "Spår / kontur", note: "full fräsbredd", ap, ae: `${num(tool.d)} mm`, src: "databas" });
+      ops.push({ name: "Ficka / urfräsning", note: `stegöver ${num((cut.stepover / tool.d) * 100, 0)} %`, ap, ae: `${num(cut.stepover, 2)} mm`, src: "databas" });
+      const h = HSM[state.material];
+      if (h && tool.type !== "downcut") {
+        const apH = Math.min(tool.len || Infinity, Math.round(tool.d * h[0] * 10) / 10);
+        ops.push({ name: "Adaptiv / HSM", note: "smal stegöver, djupt pass", ap: apH, ae: `${num(Math.round(tool.d * h[1] * 100) / 100, 2)} mm`, src: "tumregel" });
+      }
+      const fin = Math.min(tool.len || total, total);
+      ops.push({ name: "Finpass på sidan", note: "sista passet längs väggen", ap: fin, ae: "0,1–0,3 mm", src: "tumregel" });
+    }
+    let vMax = null;
+    if ((tool.type === "vbit" || tool.type === "acm") && tool.angle) {
+      vMax = (tool.d - (tool.tip || 0)) / 2 / Math.tan((tool.angle * Math.PI) / 360);
+    }
+    return { base, ap, scale, total, passes, perPass, ops, vMax, tooDeep: !vMax && tool.len && total > tool.len };
+  }
+
+  const TYPE_TIPS = {
+    upcut: "Upcut drar upp spånen, så den klarar djupa spår bäst. Överkanten kan fransa sig.",
+    downcut: "Downcut packar spånen i spåret. Håll dig till databasens djup och blås eller sug ur spåret. Använd hellre upcut för djupa spår.",
+    compression: "Ta första passet djupare än den uppåtskärande delen längst ner på fräsen (ofta 3–6 mm), annars fransas överkanten.",
+    straight: "Raka skär lyfter inte spånen. Grunda pass och bra spånsug.",
+    vbit: "Vid V-carve bestämmer vinkeln och linjebredden djupet. Djupet per pass gäller gravyr och fasning i flera pass.",
+    ball: "Grovfräs med en plan fräs först. Kulfräsen används till finpass med liten stegöver.",
+    tapered: "Grovfräs med en plan fräs först. Den koniska fräsen tar finpasset.",
+    roundover: "Ta radien i 2–3 pass i hårt trä för att undvika brännmärken och utslitningar.",
+    surfacing: "Planfräsning: ta hellre flera tunna pass än ett tjockt.",
+    flush: "Låt lagret ligga mot mallen. Ta bort det mesta materialet med annan fräs först om det är mycket kvar.",
+    pcb: "FR4 sliter hårt. Fräs i flera pass och använd spånsug, dammet är skadligt.",
+    acm: "Fräs V-spåret så att ca 0,3–0,5 mm av kärnan och bakre aluminiumskiktet blir kvar.",
+  };
 
   // ---------- Rendering ----------
   function render() {
@@ -155,7 +212,7 @@
     const box = $("materials");
     if (!box.childElementCount) {
       MATERIALS.forEach((m) => {
-        const b = el("button", { type: "button", class: "tile", "data-id": m.id, on: { click: () => { state.material = m.id; state.article = null; render(); } } },
+        const b = el("button", { type: "button", class: "tile", "data-id": m.id, on: { click: () => { state.material = m.id; state.article = null; state.feedAuto = true; render(); } } },
           MATERIAL_SVG[m.id] + `<span class="t-name">${m.label}</span><span class="t-sub">${m.sub}</span>`);
         box.appendChild(b);
       });
@@ -167,7 +224,7 @@
     const box = $("types");
     if (!box.childElementCount) {
       TYPES.forEach((t) => {
-        const b = el("button", { type: "button", class: "tile", "data-id": t.id, on: { click: () => { state.type = t.id; state.article = null; render(); } } },
+        const b = el("button", { type: "button", class: "tile", "data-id": t.id, on: { click: () => { state.type = t.id; state.article = null; state.feedAuto = true; render(); } } },
           TOOL_SVG[t.id] + `<span class="t-name">${t.label}</span><span class="t-sub">${t.sub}</span>`);
         box.appendChild(b);
       });
@@ -204,7 +261,7 @@
     r.rows.forEach((row) => {
       const def = ROWS[row.key];
       box.appendChild(seg(def.label, def.unit, row.opts.map((v) => ({ value: v, text: def.fmt(v), on: v === row.val })),
-        (v) => { state.sel[row.key] = v; state.article = null; render(); }));
+        (v) => { state.sel[row.key] = v; state.article = null; state.feedAuto = true; render(); }));
     });
 
     // Antal skär: alltid 1–4, de som inte finns gråas ut
@@ -212,13 +269,13 @@
     box.appendChild(seg("Antal skär", "", flAll.map((n) => ({
       value: n, text: `${n} skär`, on: n === state.flutes, disabled: !r.flOpts.includes(n),
       title: r.flOpts.includes(n) ? "" : "Finns inte för vald fräs",
-    })), (v) => { state.flutes = v; state.article = null; render(); }));
+    })), (v) => { state.flutes = v; state.article = null; state.feedAuto = true; render(); }));
 
     if (r.cands.length > 1) {
       box.appendChild(seg("Artikel", "skärlängd", r.cands.map((t) => ({
         value: t.code, text: (t.len ? `${num(t.len)} mm` : t.code) + (t.dlc ? " DLC" : "") + (t.group.includes("O-flute") ? " O-flute" : t.group.includes("Aluminium") ? " Alu" : ""),
         on: t.code === r.tool.code, title: t.code,
-      })), (v) => { state.article = v; render(); }, "articles"));
+      })), (v) => { state.article = v; state.feedAuto = true; render(); }, "articles"));
     }
 
     const hints = { vbit: "Diameter, vinkel och spetsbredd", tapered: "Spetsradie och antal skär", roundover: "Radie och antal skär" };
@@ -226,15 +283,28 @@
   }
 
   function renderMachine(r, c) {
-    const rpmIn = $("rpm"), mfIn = $("maxfeed");
+    const rpmIn = $("rpm"), mfIn = $("maxfeed"), fIn = $("feedin"), dIn = $("depth");
     if (document.activeElement !== rpmIn) rpmIn.value = state.rpm;
     if (document.activeElement !== mfIn) mfIn.value = state.maxFeed;
+    if (document.activeElement !== fIn) fIn.value = state.feed;
+    if (document.activeElement !== dIn) dIn.value = state.depth;
     const recRpm = r.cut.rpm;
     let html = `Databasens varvtal för den här fräsen: ${num(recRpm, 0)} rpm.`;
     if (state.rpm !== recRpm) html += ` <button type="button" class="linkbtn" id="use-rpm">Använd ${num(recRpm, 0)}</button>`;
     $("rpm-note").innerHTML = html;
     const u = $("use-rpm");
     if (u) u.addEventListener("click", () => { state.rpmAuto = true; state.rpm = recRpm; render(); });
+
+    $("feed-note").innerHTML = state.feedAuto
+      ? "Matningen följer varvtalet så att chiploaden blir rätt. Skriv in din egen matning för att se hur den påverkar chiploaden."
+      : `Din egen matning. Rätt matning vid ${num(state.rpm, 0)} rpm är ${num(c.recFeed, 0)} mm/min. <button type="button" class="linkbtn" id="use-feed">Använd ${num(c.recFeed, 0)}</button>`;
+    const uf = $("use-feed");
+    if (uf) uf.addEventListener("click", () => { state.feedAuto = true; render(); });
+
+    const pres = $("depth-presets");
+    const opts = [3, 6, 12, 18];
+    pres.innerHTML = "";
+    opts.forEach((v) => pres.appendChild(el("button", { type: "button", "aria-pressed": String(state.depth === v), on: { click: () => { state.depth = v; render(); } } }, `${v}`)));
   }
 
   function renderResult(r, c) {
@@ -246,24 +316,39 @@
     // Mätare: kvot 0,4 → vänster kant, 1,0 → mitten, 1,6 → höger kant
     const pos = clamp(0.5 + (c.ratio - 1) / 1.2, 0, 1);
     $("mark").style.left = (pos * 100).toFixed(1) + "%";
-    const zone = c.ratio < 0.8 ? 0 : c.ratio > 1.2 ? 2 : 1;
+    const zone = c.zone;
     [...$("legend").children].forEach((s, i) => s.classList.toggle("on", i === zone));
 
-    // Uppmaning när matningen slår i maskinens tak
+    // Rekommendation och varningar
+    const rl = $("rec-line");
+    rl.hidden = state.feedAuto;
+    rl.innerHTML = state.feedAuto ? "" : `Rätt matning: <b>${num(c.recFeed, 0)} mm/min</b> · <button type="button" class="linkbtn" id="use-feed2">Använd</button>`;
+    const uf2 = $("use-feed2");
+    if (uf2) uf2.addEventListener("click", () => { state.feedAuto = true; render(); });
+
     const call = $("callout");
-    let msg = "";
-    if (state.ownOn && state.own) {
-      if (zone === 0) msg = `<p><b>För låg chipload.</b> Fräsen gnider mer än den skär, vilket ger värme och slöa skär. Rätt matning vid ${num(state.rpm, 0)} rpm är ${num(Math.min(c.ideal, state.maxFeed), 0)} mm/min.</p>`;
-      if (zone === 2) msg = `<p><b>För hög chipload.</b> Risk för fräsbrott och dålig yta. Sänk matningen till cirka ${num(Math.min(c.ideal, state.maxFeed), 0)} mm/min eller höj varvtalet.</p>`;
-    } else if (c.capped) {
-      const better = clamp(c.rpmForMax, RPM_MIN, RPM_MAX);
-      msg = `<p><b>Maskinen hinner inte.</b> Rätt chipload kräver ${num(c.ideal, 0)} mm/min, men maxmatningen är ${num(state.maxFeed, 0)} mm/min.</p>` +
-        (better < state.rpm ? `<p>Sänk varvtalet till ${num(better, 0)} rpm för rätt chipload. <button type="button" class="linkbtn" id="use-better">Använd ${num(better, 0)}</button></p>` : "");
+    const msgs = [];
+    if (!state.feedAuto && zone === 0) {
+      const rpmFix = clamp(c.rpmForFeed(c.feed), RPM_MIN, RPM_MAX);
+      msgs.push(`<p><b>För låg chipload (${num(c.ratio * 100, 0)} % av rätt).</b> Fräsen gnider mer än den skär, vilket ger värme, brännmärken och slöa skär. ` +
+        (c.capped ? `Maskinens max ${num(state.maxFeed, 0)} mm/min räcker inte vid ${num(state.rpm, 0)} rpm, så sänk varvtalet` : `Höj matningen till ${num(c.recFeed, 0)} mm/min`) +
+        (rpmFix < state.rpm ? `${c.capped ? "" : " eller sänk varvtalet"} till ${num(rpmFix, 0)} rpm. <button type="button" class="linkbtn" data-rpm="${rpmFix}">Använd ${num(rpmFix, 0)} rpm</button>` : ".") + `</p>`);
+    } else if (!state.feedAuto && zone === 2) {
+      const rpmFix = c.rpmForFeed(c.feed);
+      msgs.push(`<p><b>För hög chipload (${num(c.ratio * 100, 0)} % av rätt).</b> Risk för fräsbrott, vibrationer och dålig yta. Sänk matningen till ${num(c.recFeed, 0)} mm/min` +
+        (rpmFix <= RPM_MAX ? ` eller höj varvtalet till ${num(rpmFix, 0)} rpm. <button type="button" class="linkbtn" data-rpm="${rpmFix}">Använd ${num(rpmFix, 0)} rpm</button>` : ".") +
+        ` Skärdjupet nedan är sänkt för att kompensera.</p>`);
+    } else if (state.feedAuto && c.capped) {
+      const better = clamp(Math.floor(state.maxFeed / (c.rec * r.tool.flutes) / 100) * 100, RPM_MIN, RPM_MAX);
+      msgs.push(`<p><b>Maskinen hinner inte.</b> Rätt chipload kräver ${num(c.ideal, 0)} mm/min, men maxmatningen är ${num(state.maxFeed, 0)} mm/min.</p>` +
+        (better < state.rpm ? `<p>Sänk varvtalet till ${num(better, 0)} rpm för rätt chipload. <button type="button" class="linkbtn" data-rpm="${better}">Använd ${num(better, 0)} rpm</button></p>` : ""));
     }
-    call.innerHTML = msg;
-    call.hidden = !msg;
-    const ub = $("use-better");
-    if (ub) ub.addEventListener("click", () => { state.rpmAuto = false; state.rpm = clamp(c.rpmForMax, RPM_MIN, RPM_MAX); render(); });
+    if (c.overMax) msgs.push(`<p><b>Över maskinens maxmatning</b> (${num(state.maxFeed, 0)} mm/min). Maskinen kommer inte att gå så fort.</p>`);
+    call.innerHTML = msgs.join("");
+    call.hidden = !msgs.length;
+    call.querySelectorAll("[data-rpm]").forEach((b) => b.addEventListener("click", () => { state.rpmAuto = false; state.rpm = +b.dataset.rpm; render(); }));
+
+    renderDepth(r, c);
 
     const stepPct = tool.d && ["upcut", "downcut", "compression", "straight", "ball", "surfacing", "flush", "pcb"].includes(tool.type)
       ? ` <small>${num((cut.stepover / tool.d) * 100, 0)} %</small>` : "";
@@ -271,7 +356,7 @@
       ["Chipload", `${num(c.chip, 3)} <small>mm/tand</small>`],
       ["Rätt för materialet", `${num(c.rec, 3)} <small>mm/tand${cut.chipSource === "calc" ? " (beräknad)" : ""}</small>`],
       ["Nedmatning", `${num(c.plunge, 0)} <small>mm/min</small>`],
-      ["Skärdjup per pass", `${num(cut.stepdown, 2)} <small>mm</small>`],
+      ["Skärdjup per pass", `${num(lastPlan.ap, 2)} <small>mm</small>`],
       ["Stegöver", `${num(cut.stepover, 2)} <small>mm</small>${stepPct}`],
       ["Varvtal", `${num(state.rpm, 0)} <small>rpm</small>`],
     ];
@@ -285,12 +370,6 @@
     if (tool.dlc) details.push("DLC-belagd");
     $("article").innerHTML = TOOL_SVG[tool.type] + `<code>${tool.code}</code><span>${details.join(" · ")}</span>`;
 
-    // Egen matning
-    $("own-on").checked = !!state.ownOn;
-    $("own-wrap").hidden = !state.ownOn;
-    const own = $("own");
-    if (document.activeElement !== own) own.value = state.own || c.calcFeed;
-
     // Mobilfot
     $("dock-feed").textContent = num(c.feed, 0);
     $("dock-sub").textContent = `${num(c.chip, 3)} mm/tand · ${["för lite", "rätt", "för mycket"][zone]}`;
@@ -301,10 +380,34 @@
       `Matning: ${num(c.feed, 0)} mm/min`,
       `Nedmatning: ${num(c.plunge, 0)} mm/min`,
       `Varvtal: ${num(state.rpm, 0)} rpm`,
-      `Skärdjup per pass: ${num(cut.stepdown, 2)} mm`,
+      `Skärdjup per pass: ${num(lastPlan.ap, 2)} mm`,
       `Stegöver: ${num(cut.stepover, 2)} mm`,
       `Chipload: ${num(c.chip, 3)} mm/tand (rätt: ${num(c.rec, 3)})`,
+      `Djup ${num(lastPlan.total, 1)} mm: ${lastPlan.passes} pass à ${num(lastPlan.perPass, 2)} mm`,
     ].join("\n");
+  }
+
+  let lastPlan = null;
+  function renderDepth(r, c) {
+    const p = depthPlan(r, c);
+    lastPlan = p;
+    const t = r.tool;
+    let h = `<div class="r-label">Skärdjup</div>
+      <div class="depth-head"><span class="depth-big">${p.passes} pass <small>à ${num(p.perPass, 2)} mm</small></span>
+      <span class="note">för ${num(p.total, 1)} mm totalt, max ${num(p.ap, 2)} mm per pass</span></div>`;
+    if (p.scale < 1) h += `<p class="note">Djupet per pass är sänkt från databasens ${num(p.base, 2)} mm eftersom chiploaden är ${num(c.ratio * 100, 0)} % av rätt.</p>`;
+    if (p.tooDeep) h += `<p class="warnline">${num(p.total, 1)} mm är djupare än fräsens skärlängd (${num(t.len)} mm). Välj en längre fräs, annars gnider skaftet.</p>`;
+    if (p.vMax && p.total > p.vMax) h += `<p class="warnline">V-biten når full bredd (Ø${num(t.d)} mm) redan vid ${num(p.vMax, 1)} mm djup. Djupare än så blir spåret raka väggar med skaftet som gnider.</p>`;
+    if (p.ops.length) {
+      h += `<div class="ops-wrap"><table class="ops"><thead><tr><th>Bearbetning</th><th>Djup/pass</th><th>Stegöver</th></tr></thead><tbody>` +
+        p.ops.map((o) => `<tr><td><b>${o.name}</b><span class="src">${o.note} · ${o.src}</span></td><td><b>${num(o.ap, 2)}</b> mm</td><td>${o.ae}</td></tr>`).join("") +
+        `</tbody></table></div>`;
+    }
+    const tips = [TYPE_TIPS[t.type]];
+    if (state.material === "aluminium") tips.push("I aluminium: använd luft eller smörjning så att spånen inte svetsar fast. Grunt och jämnt är säkrare än djupt på en hobbymaskin.");
+    if (FLAT.includes(t.type)) tips.push("Värden märkta <b>databas</b> kommer från verktygsfilen. <b>Tumregel</b> är allmänna startvärden som du bör provfräsa.");
+    h += `<ul class="tips">${tips.map((x) => `<li>${x}</li>`).join("")}</ul>`;
+    $("depth-out").innerHTML = h;
   }
 
   function toolShort(t) {
@@ -317,14 +420,15 @@
 
   // ---------- Händelser ----------
   let lastCopy = "";
-  const STEPS = { rpm: RPM_STEP, maxfeed: 100, own: 50 };
+  const STEPS = { rpm: RPM_STEP, maxfeed: 100, feed: 50, depth: 0.5 };
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-step]");
     if (!b) return;
     const which = b.dataset.step, dir = +b.dataset.dir;
     if (which === "rpm") { state.rpmAuto = false; state.rpm = clamp(Math.round((state.rpm + dir * RPM_STEP) / RPM_STEP) * RPM_STEP, RPM_MIN, RPM_MAX); }
     if (which === "maxfeed") state.maxFeed = clamp(state.maxFeed + dir * STEPS.maxfeed, 300, 30000);
-    if (which === "own") { const base = state.own || +$("own").value; state.own = clamp(Math.round((base + dir * STEPS.own) / 50) * 50, 50, 30000); }
+    if (which === "feed") { state.feedAuto = false; state.feed = clamp(Math.round((state.feed + dir * STEPS.feed) / 50) * 50, 50, 30000); }
+    if (which === "depth") state.depth = clamp(Math.round((state.depth + dir * STEPS.depth) * 2) / 2, 0.5, 100);
     render();
   });
   function bindInput(id, apply) {
@@ -334,8 +438,8 @@
   }
   bindInput("rpm", (v) => { state.rpmAuto = false; state.rpm = clamp(Math.round(v), RPM_MIN, RPM_MAX); });
   bindInput("maxfeed", (v) => { state.maxFeed = clamp(Math.round(v), 300, 30000); });
-  bindInput("own", (v) => { state.own = clamp(Math.round(v), 50, 30000); });
-  $("own-on").addEventListener("change", (e) => { state.ownOn = e.target.checked; if (state.ownOn && !state.own) state.own = +$("own").value; render(); });
+  bindInput("feedin", (v) => { state.feedAuto = false; state.feed = clamp(Math.round(v), 50, 30000); });
+  bindInput("depth", (v) => { state.depth = clamp(Math.round(v * 10) / 10, 0.1, 100); });
 
   $("copy").addEventListener("click", () => {
     const toast = $("toast");
