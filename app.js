@@ -580,5 +580,225 @@
     acm: bit(`<path d="M15 31h14v6H15z" fill="${fl}"/><path d="M5 37h34L22 56z" fill="${fl}"/><path d="M22 40v14"/>`),
   };
 
+  // ---------- Hitta fräsen: foto av etiketten eller artikelkod ----------
+  const CODES = TOOLS.map((t) => t.code);
+  const normCode = (s) => String(s).toUpperCase().replace(/[–—_]/g, "-").replace(/,/g, ".").replace(/\s+/g, "");
+  // Tecken som OCR ofta blandar ihop kostar mindre att byta
+  const CONFUSE = new Set(["O0", "Q0", "D0", "I1", "L1", "T1", "S5", "B8", "Z2", "G6", "A4"]
+    .flatMap((p) => [p, p[1] + p[0]]));
+  function dist(a, b) {
+    const m = a.length, n = b.length;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j), cur = new Array(n + 1);
+    for (let i = 1; i <= m; i++) {
+      cur[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const x = a[i - 1], y = b[j - 1];
+        const sub = x === y ? 0 : CONFUSE.has(x + y) ? 0.3 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + sub);
+      }
+      [prev, cur] = [cur, prev];
+    }
+    return prev[n];
+  }
+
+  // Rangordna fräsar mot avläst text. Lägre poäng = bättre.
+  function matchText(text) {
+    const flat = normCode(text);
+    const tokens = String(text).split(/[\s|,;:]+/).map(normCode).filter((t) => t.length >= 3);
+    const cands = new Set(tokens);
+    for (let i = 0; i < tokens.length - 1; i++) cands.add(tokens[i] + tokens[i + 1]);
+    return TOOLS.map((t) => {
+      const c = normCode(t.code);
+      if (flat.includes(c)) return { t, score: 0 };
+      let best = 1;
+      cands.forEach((w) => { best = Math.min(best, dist(w, c) / c.length); });
+      return { t, score: best };
+    }).sort((a, b) => a.score - b.score);
+  }
+
+  // Sök: flera ord (t.ex. "tb r0.5" eller "uc 6.0 l22") måste alla finnas i koden; ett ord tål stavfel.
+  function searchCodes(q) {
+    const terms = String(q).split(/\s+/).map(normCode).filter(Boolean);
+    if (!terms.length) return [];
+    return TOOLS.map((t) => {
+      const c = normCode(t.code);
+      let score = 0;
+      for (const n of terms) {
+        const i = c.indexOf(n);
+        if (c === n) continue;
+        if (i === 0) score += 0.1 + (c.length - n.length) / 1000;
+        else if (i > 0) score += 0.2 + i / 100;
+        else if (terms.length === 1 && n.length >= 4) score += 0.5 + dist(n, c.slice(0, n.length)) / n.length;
+        else return null;
+      }
+      return { t, score: score / terms.length };
+    }).filter((r) => r && r.score < 0.85).sort((a, b) => a.score - b.score).slice(0, 6);
+  }
+
+  function describe(t) {
+    return [TYPE[t.type].label, toolShort(t), `${t.flutes} skär`, t.len ? `skärlängd ${num(t.len)} mm` : ""].filter(Boolean).join(" · ");
+  }
+
+  function applyTool(t) {
+    let matNote = "";
+    if (!t.cuts[state.material]) {
+      const m = MATERIALS.find((x) => t.cuts[x.id]);
+      const old = MATERIALS.find((x) => x.id === state.material);
+      matNote = ` Den saknar data för ${old.full.toLowerCase()}, så materialet byttes till ${m.full.toLowerCase()}.`;
+      state.material = m.id;
+    }
+    state.type = t.type;
+    TYPE[t.type].rows.forEach((k) => { state.sel[k] = ROWS[k].get(t); });
+    state.flutes = t.flutes;
+    state.article = t.code;
+    state.feedAuto = true;
+    state.collapsed[1] = false;
+    state.collapsed[2] = false;
+    render();
+    return matNote;
+  }
+
+  const out = $("finder-out");
+  function candList(list, chosen) {
+    return `<div class="cands">` + list.map(({ t }) =>
+      `<button type="button" class="cand" data-pick="${t.code}" aria-pressed="${t.code === chosen}">${TOOL_SVG[t.type]}<span><code>${t.code}</code><span>${describe(t)}</span></span><span class="pick">${t.code === chosen ? "Vald" : "Välj"}</span></button>`
+    ).join("") + `</div>`;
+  }
+  let lastList = [], lastThumb = "";
+  function showResult(list, note) {
+    lastList = list;
+    const best = list[0];
+    const clear = best && best.score <= 0.2 && (!list[1] || list[1].score - best.score >= 0.05);
+    let h = lastThumb;
+    if (!best || best.score > 0.45) {
+      h += `<p class="f-status bad">Hittade ingen artikelkod som stämmer. Ta en skarpare bild rakt framifrån, eller skriv koden i sökfältet.</p>`;
+      if (note) h += `<p class="note">Avläst text: ${escapeHtml(note.slice(0, 160))}</p>`;
+      out.innerHTML = h;
+      return;
+    }
+    const top = list.filter((r) => r.score <= Math.max(0.45, best.score + 0.15)).slice(0, 3);
+    if (clear) {
+      const msg = applyTool(best.t);
+      h += `<p class="f-status good">Hittade ${best.t.code}.${escapeHtml(msg)}</p>`;
+      if (top.length > 1) h += `<p class="note">Fel fräs? Välj en av de andra:</p>`;
+      out.innerHTML = h + candList(top, best.t.code);
+    } else {
+      h += `<p class="f-status">Osäker avläsning. Välj den kod som står på etiketten:</p>`;
+      out.innerHTML = h + candList(top, null);
+    }
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  out.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pick]");
+    if (b) {
+      const t = TOOLS.find((x) => x.code === b.dataset.pick);
+      const msg = applyTool(t);
+      const list = lastList.length ? lastList : [{ t }];
+      out.innerHTML = lastThumb + `<p class="f-status good">Vald: ${t.code}.${escapeHtml(msg)}</p>` + candList(list.slice(0, 3), t.code);
+      $("code-search").value = "";
+    }
+    if (e.target.closest("#f-stop") && ctl) ctl.abort();
+  });
+
+  // Sökfält
+  $("code-search").addEventListener("input", (e) => {
+    const list = searchCodes(e.target.value);
+    lastThumb = "";
+    lastList = list;
+    if (!e.target.value.trim()) { out.innerHTML = ""; return; }
+    out.innerHTML = list.length ? candList(list, null) : `<p class="f-status bad">Ingen artikelkod matchar.</p>`;
+  });
+
+  // Bildavläsning: Claude om sidan körs i en Claude-vy, annars OCR i webbläsaren
+  let ctl = null;
+  async function getSample() {
+    try {
+      if (!window.claude || !window.claude.use) return null;
+      const s = await window.claude.use("sample");
+      if (!s) return null;
+      const lim = await s.limits().catch(() => null);
+      return lim && lim.images ? s : null;
+    } catch (e) { return null; }
+  }
+  function shrink(file, max) {
+    return new Promise((res) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        cv.toBlob((b) => res({ blob: b || file, thumb: cv.toDataURL("image/jpeg", 0.5) }), "image/jpeg", 0.9);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); res({ blob: file, thumb: "" }); };
+      img.src = url;
+    });
+  }
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      if (window.Tesseract) return res();
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = () => rej(new Error("load"));
+      document.head.appendChild(s);
+    });
+  }
+  async function readWithOcr(blob) {
+    await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+    const r = await window.Tesseract.recognize(blob, "eng");
+    return r.data.text || "";
+  }
+  async function readWithClaude(sample, blob, signal) {
+    const prompt =
+      "Bilden visar etiketten eller förpackningen till en CNC-fräs (frässtål). Läs av artikelkoden som är tryckt på den. " +
+      "Koden ska vara en av koderna i listan nedan; jämför tecken för tecken (diameter D, skärlängd L, radie R, vinkel ° och suffixet sist). " +
+      'Svara endast med JSON: {"codes": [upp till 3 koder ur listan, mest sannolik först, tom lista om ingen passar], "text": "texten du kan läsa på etiketten"}.\n\nKoder:\n' +
+      CODES.join("\n");
+    return sample.json(prompt, { images: [blob], signal, modelTier: "default", effort: "low" });
+  }
+
+  $("photo").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    $("code-search").value = "";
+    const { blob, thumb } = await shrink(file, 1600);
+    lastThumb = thumb ? `<img class="thumb" src="${thumb}" alt="Din bild på etiketten">` : "";
+    const working = (txt) => { out.innerHTML = `<div class="f-status">${lastThumb}<span class="spin" aria-hidden="true"></span><span>${txt}</span>${ctl ? ' <button type="button" class="linkbtn" id="f-stop">Avbryt</button>' : ""}</div>`; };
+    const sample = await getSample();
+    try {
+      if (sample) {
+        ctl = new AbortController();
+        working("Claude läser etiketten …");
+        const res = await readWithClaude(sample, blob, ctl.signal);
+        ctl = null;
+        const codes = Array.isArray(res && res.codes) ? res.codes.map(String) : [];
+        const exact = codes.map((c) => TOOLS.find((t) => normCode(t.code) === normCode(c))).filter(Boolean);
+        if (exact.length) {
+          const rest = matchText((res.text || "") + " " + codes.join(" ")).filter((r) => !exact.includes(r.t));
+          showResult(exact.map((t, i) => ({ t, score: i === 0 && exact.length === 1 ? 0 : 0.1 + i * 0.01 })).concat(rest.slice(0, 2)), res.text);
+        } else {
+          showResult(matchText((res && res.text) || ""), res && res.text);
+        }
+      } else {
+        ctl = null;
+        working("Läser texten på etiketten …");
+        const text = await readWithOcr(blob);
+        showResult(matchText(text), text.replace(/\s+/g, " ").trim());
+      }
+    } catch (err) {
+      ctl = null;
+      const code = err && err.code;
+      if (code === "cancelled") { out.innerHTML = ""; return; }
+      const msg = code === "not_granted" || code === "sampling_disabled" ? "Bildavläsning är inte tillåten här."
+        : code === "rate_limited" ? "För många försök just nu. Vänta en stund och försök igen."
+        : code === "image_rejected" ? "Bilden kunde inte läsas. Prova en annan bild."
+        : "Kunde inte läsa bilden.";
+      out.innerHTML = lastThumb + `<p class="f-status bad">${msg} Skriv artikelkoden i sökfältet i stället.</p>`;
+    }
+  });
+
   render();
 })();

@@ -5,6 +5,11 @@ verktygsdatabasen `data/verkstaden5-vectric-hobby.vtdb` (Vectric-format, profil 
 
 ## Så fungerar den
 
+**Hitta din fräs:** fota etiketten eller skriv artikelkoden. Koderna i databasen är exakt de som står på
+förpackningen, så appen jämför det avlästa mot alla 120 koder och väljer typ, mått, antal skär och artikel.
+I den publicerade Claude-versionen läser Claude bilden. Som fristående sida används Tesseract.js
+(OCR i webbläsaren, laddas från cdn.jsdelivr.net vid första fotot). Sökfältet fungerar överallt.
+
 1. **Material** – hårt trä, mjukt trä/plywood, MDF, melamin, akryl, hård plast, mjuk plast, aluminium, FR4/PCB, ACM.
 2. **Typ av fräs** – upcut, downcut, V-bit, kulfräs, konisk radiefräs, kompression, notfräs,
    avrundning, planfräs, kopierfräs, PCB-fräs och V-spår för ACM. Typer som saknar data för materialet gråas ut.
