@@ -23,10 +23,24 @@ I den publicerade Claude-versionen läser Claude bilden. Som fristående sida an
 Matning = chipload × antal skär × varvtal. Nedmatning, skärdjup per pass och stegöver tas från databasen.
 Förslagen för adaptiv fräsning och finpass är tumregler, inte databasvärden, och är märkta så i appen.
 
-## Köra
+## Installera som app på mobilen
+
+Appen är en installerbar webbapp (PWA) och fungerar offline efter första besöket.
+
+1. **Slå på GitHub Pages en gång:** repot på GitHub → *Settings* → *Pages* → *Build and deployment* →
+   Source: *Deploy from a branch* → Branch: `claude/frasstol-calculator-app-rrjnb0`, mapp `/ (root)` → *Save*.
+2. Efter någon minut finns appen på `https://epicman228-lgtm.github.io/Cnc-app/`.
+3. Öppna adressen i mobilen och installera:
+   - **iPhone (Safari):** Dela → *Lägg till på hemskärmen*.
+   - **Android (Chrome):** knappen *Installera appen* i appen, eller menyn ⋮ → *Installera app*.
+
+Nya versioner som pushas till grenen hämtas automatiskt nästa gång appen öppnas med internet.
+Fotoavläsningen använder Tesseract.js, som laddas ner vid första fotot (kräver internet den gången).
+
+## Köra lokalt
 
 Öppna `index.html` i en webbläsare, eller använd den fristående filen `dist/frasmatning.html`
-(allt inbakat, fungerar offline – kan läggas på telefonen).
+(allt inbakat, en enda fil).
 
 ## Uppdatera data från en ny .vtdb
 

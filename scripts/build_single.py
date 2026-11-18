@@ -18,6 +18,9 @@ for src in ("data/tools.js", "app.js"):
     js = (ROOT / src).read_text(encoding="utf-8").replace("</script", "<\\/script")
     html = html.replace(f'<script src="{src}"></script>', f"<script>\n{js}\n</script>")
 
+# PWA-delarna (manifest, ikoner, service worker) kräver de separata filerna och tas bort i enfilsversionen
+html = re.sub(r"<!-- pwa -->.*?<!-- /pwa -->\s*", "", html, flags=re.S)
+
 if fragment:
     html = re.sub(r"<!doctype html>\s*|</?html[^>]*>\s*|</?head>\s*|</?body>\s*", "", html, flags=re.I)
     html = re.sub(r'<meta charset[^>]*>\s*|<meta name="viewport"[^>]*>\s*', "", html)

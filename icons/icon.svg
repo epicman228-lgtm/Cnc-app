@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#161a17"/>
+  <g transform="translate(226 246)">
+    <!-- skaft -->
+    <rect x="-34" y="-176" width="68" height="128" rx="8" fill="#eef0ec"/>
+    <!-- skärdel -->
+    <path d="M-34 -48h68v196h-68z" fill="#cfd5cc"/>
+    <g stroke="#161a17" stroke-width="10" stroke-linecap="round" fill="none">
+      <path d="M-34 0 34 -36"/>
+      <path d="M-34 56 34 20"/>
+      <path d="M-34 112 34 76"/>
+      <path d="M-34 148 34 120"/>
+    </g>
+    <!-- spånlock -->
+    <path d="M58 70c42-6 74 18 70 52-4 30-38 40-58 22-16-14-6-38 14-34" fill="none" stroke="#ec8a4f" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>

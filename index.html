@@ -6,6 +6,15 @@
 <title>Fräsmatning hobby-CNC</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#eef0ec">
+<!-- pwa -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fräsmatning">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- /pwa -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
@@ -53,7 +62,7 @@ body {
   font: 15px/1.5 var(--font-body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 20px 96px;
+  padding-block: calc(20px + env(safe-area-inset-top, 0px)) 96px;
 }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -63,6 +72,8 @@ button { cursor: pointer; }
 header.top { display: grid; gap: 6px; max-width: 680px; }
 .eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.btn.install { min-height: 38px; padding: 0 14px; font-size: 14px; }
 .lede { margin: 0; color: var(--muted); max-width: 60ch; }
 
 .layout { display: grid; gap: 20px; align-items: start; }
@@ -324,7 +335,7 @@ footer.src p { margin: 0; }
 <div class="wrap">
   <header class="top">
     <span class="eyebrow">Matning och varvtal för CNC-fräsar</span>
-    <h1>Fräsmatning</h1>
+    <div class="title-row"><h1>Fräsmatning</h1><button type="button" class="btn ghost install" id="install" hidden>Installera appen</button></div>
     <p class="lede">Välj material och frässtål. Matningen räknas fram ur rätt chipload för just den fräsen och ditt varvtal.</p>
   </header>
 
@@ -444,5 +455,27 @@ footer.src p { margin: 0; }
 
 <script src="data/tools.js"></script>
 <script src="app.js"></script>
+<!-- pwa -->
+<script>
+  // Installerbar webbapp: registrera service worker (bara när sidan körs som egen sida över http/https)
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && window.top === window) {
+    window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  }
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvt = e;
+    document.getElementById("install").hidden = false;
+  });
+  document.getElementById("install").addEventListener("click", async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    await installEvt.userChoice.catch(() => {});
+    installEvt = null;
+    document.getElementById("install").hidden = true;
+  });
+  window.addEventListener("appinstalled", () => { document.getElementById("install").hidden = true; });
+</script>
+<!-- /pwa -->
 </body>
 </html>

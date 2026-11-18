@@ -53,7 +53,7 @@ body {
   font: 15px/1.5 var(--font-body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 20px 96px;
+  padding-block: calc(20px + env(safe-area-inset-top, 0px)) 96px;
 }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -63,6 +63,8 @@ button { cursor: pointer; }
 header.top { display: grid; gap: 6px; max-width: 680px; }
 .eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.btn.install { min-height: 38px; padding: 0 14px; font-size: 14px; }
 .lede { margin: 0; color: var(--muted); max-width: 60ch; }
 
 .layout { display: grid; gap: 20px; align-items: start; }
@@ -324,7 +326,7 @@ footer.src p { margin: 0; }
 <div class="wrap">
   <header class="top">
     <span class="eyebrow">Matning och varvtal för CNC-fräsar</span>
-    <h1>Fräsmatning</h1>
+    <div class="title-row"><h1>Fräsmatning</h1><button type="button" class="btn ghost install" id="install" hidden>Installera appen</button></div>
     <p class="lede">Välj material och frässtål. Matningen räknas fram ur rätt chipload för just den fräsen och ditt varvtal.</p>
   </header>
 
