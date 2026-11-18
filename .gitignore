@@ -1,0 +1,3 @@
+*.vtdb-shm
+*.vtdb-wal
+__pycache__/

@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fräsmatning hobby-CNC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#eef0ec">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: en smal arbetskolumn (steg 1–4) och ett resultatkort; på breda skärmar ligger resultatet klistrat till höger. */
+:root {
+  --bg: #eef0ec;
+  --surface: #fbfcf9;
+  --surface-2: #e4e7e1;
+  --ink: #161a17;
+  --muted: #5a625c;
+  --line: #d3d8d0;
+  --accent: #b9521b;
+  --on-ink: #fbfcf9;
+  --good: #5d8a37;
+  --warn: #d2973a;
+  --bad: #c1513d;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 18px;
+  --pill: 999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121512; --surface: #1a1e1b; --surface-2: #242925; --ink: #eef1ec; --muted: #9ba49d;
+    --line: #2f3631; --accent: #ec8a4f; --on-ink: #121512;
+    --good: #85b85a; --warn: #e2aa52; --bad: #e0715c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121512; --surface: #1a1e1b; --surface-2: #242925; --ink: #eef1ec; --muted: #9ba49d;
+  --line: #2f3631; --accent: #ec8a4f; --on-ink: #121512;
+  --good: #85b85a; --warn: #e2aa52; --bad: #e0715c;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 96px;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: grid; gap: 6px; max-width: 680px; }
+.eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+
+.layout { display: grid; gap: 20px; align-items: start; }
+@media (min-width: 960px) {
+  .layout { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .result-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px clamp(14px, 3vw, 22px);
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.step { display: grid; gap: 12px; min-width: 0; }
+.step-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.step-no {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: var(--ink); color: var(--on-ink);
+  display: inline-grid; place-items: center;
+  font: 700 13px/1 var(--font-display);
+  align-self: center;
+}
+h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
+.step-hint { color: var(--muted); font-size: 14px; }
+
+/* Materialkort */
+.tiles { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 560px) { .tiles.mat { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.tiles.types { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 560px) { .tiles.types { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile {
+  position: relative;
+  display: grid; justify-items: center; align-content: start; gap: 4px;
+  padding: 10px 6px 10px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  text-align: center;
+  min-width: 0;
+  transition: border-color .15s, transform .15s;
+}
+.tile:hover:not(:disabled) { border-color: var(--muted); }
+.tile:active:not(:disabled) { transform: scale(.98); }
+.tile[aria-pressed="true"] { border: 2.5px solid var(--ink); padding: 9px 5px; }
+.tile[aria-pressed="true"]::after {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--ink);
+}
+.tile[aria-pressed="true"]::before {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; z-index: 1;
+  background: var(--on-ink);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.2l2.6 2.6L12 5.4' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.2l2.6 2.6L12 5.4' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+}
+.tile:disabled { opacity: .38; cursor: not-allowed; }
+.tile svg { display: block; }
+.tile .t-name { font: 700 14px/1.15 var(--font-display); overflow-wrap: anywhere; }
+.tile .t-sub { font-size: 11.5px; line-height: 1.2; color: var(--muted); overflow-wrap: anywhere; }
+.tiles.types .tile svg { color: var(--ink); }
+.type-blurb { margin: 0; font-size: 14px; color: var(--muted); }
+.type-blurb strong { color: var(--ink); font-weight: 600; }
+
+/* Segmenterade rader (diameter, skär …) */
+.field { display: grid; gap: 6px; min-width: 0; }
+.field-label { font: 600 13px/1.2 var(--font-body); color: var(--muted); display: flex; gap: 6px; }
+.seg {
+  display: flex; gap: 2px; padding: 4px;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--pill);
+  overflow-x: auto; scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg button {
+  flex: 1 0 auto; min-width: 48px; min-height: 44px; padding: 0 12px;
+  border: 0; background: transparent; border-radius: var(--pill);
+  font: 500 16px/1 var(--font-body); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); font-weight: 600; }
+.seg button:disabled { opacity: .3; cursor: not-allowed; }
+.seg button:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-2); }
+.seg.articles button { font-size: 13.5px; font-family: var(--font-body); letter-spacing: .01em; }
+
+/* Maskin */
+.machine { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 459px) { .machine { grid-template-columns: minmax(0, 1fr); } }
+.stepper {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: stretch;
+  border: 1.5px solid var(--line); border-radius: var(--pill); background: var(--surface); overflow: hidden;
+}
+.stepper button { border: 0; background: transparent; font-size: 22px; min-height: 48px; }
+.stepper button:hover { background: var(--surface-2); }
+.stepper input {
+  border: 0; border-inline: 1.5px solid var(--line); background: transparent; min-width: 0;
+  text-align: center; font: 600 20px/1 var(--font-display); font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.note { font-size: 14px; color: var(--muted); margin: 0; }
+.linkbtn {
+  border: 0; background: none; padding: 0; color: var(--ink); font-weight: 600;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px;
+}
+.linkbtn:hover { color: var(--accent); }
+
+/* Resultat */
+.result { gap: 18px; }
+.r-label { font: 700 13px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.feed { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.feed-num { font: 800 clamp(52px, 13vw, 76px)/.95 var(--font-display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.feed-unit { font: 500 22px/1 var(--font-body); color: var(--muted); }
+.r-sub { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+
+.gauge { display: grid; gap: 8px; }
+.gauge-track {
+  position: relative; height: 12px; border-radius: var(--pill);
+  background: linear-gradient(90deg, var(--bad) 0%, var(--warn) 20%, var(--good) 34%, var(--good) 66%, var(--warn) 80%, var(--bad) 100%);
+  opacity: .9;
+}
+.gauge-mark {
+  position: absolute; top: 50%; width: 8px; height: 26px; border-radius: 4px;
+  background: var(--ink); border: 2px solid var(--surface);
+  transform: translate(-50%, -50%); transition: left .35s cubic-bezier(.3,.7,.3,1);
+}
+.gauge-legend { display: grid; grid-template-columns: 1fr auto 1fr; font-size: 14px; gap: 8px; }
+.gauge-legend span:nth-child(1) { color: var(--bad); }
+.gauge-legend span:nth-child(2) { color: var(--muted); font-weight: 600; text-align: center; }
+.gauge-legend span:nth-child(3) { color: var(--bad); text-align: right; }
+.gauge-legend .on { color: var(--good) !important; font-weight: 700; }
+.gauge-legend span:nth-child(1).on, .gauge-legend span:nth-child(3).on { color: var(--bad) !important; }
+
+.kv { display: grid; margin: 0; border-top: 1px solid var(--line); }
+.kv > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font: 600 16px/1.3 var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
+.kv dd small { font: 400 13px var(--font-body); color: var(--muted); }
+
+.callout {
+  display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+  font-size: 14px;
+}
+.callout p { margin: 0; }
+
+.article {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center;
+  padding: 12px 14px; border-radius: 12px; background: var(--surface-2);
+}
+.article svg { grid-row: span 3; color: var(--ink); }
+.article code { font: 700 15px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.article span { font-size: 13.5px; color: var(--muted); }
+
+.own { display: grid; gap: 10px; }
+.own-toggle { display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; }
+.own-toggle input { width: 20px; height: 20px; accent-color: var(--ink); }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn {
+  min-height: 44px; padding: 0 18px; border-radius: var(--pill); border: 1.5px solid var(--ink);
+  background: var(--ink); color: var(--on-ink); font-weight: 600;
+}
+.btn.ghost { background: transparent; color: var(--ink); }
+.toast { font-size: 14px; color: var(--good); font-weight: 600; }
+
+footer.src { max-width: 680px; color: var(--muted); font-size: 13px; display: grid; gap: 6px; }
+footer.src p { margin: 0; }
+
+/* Mobilfot med sammanfattning */
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--ink); color: var(--on-ink);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 0; width: 100%; text-align: left;
+  transition: transform .25s ease;
+}
+.dock.away { transform: translateY(110%); }
+.dock b { font: 800 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.dock .d-sub { font-size: 13px; opacity: .8; }
+.dock .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--good); }
+@media (min-width: 960px) { .dock { display: none; } }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">Matning och varvtal för CNC-fräsar</span>
+    <h1>Fräsmatning</h1>
+    <p class="lede">Välj material och frässtål. Matningen räknas fram ur rätt chipload för just den fräsen och ditt varvtal.</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel" aria-label="Inställningar">
+      <div class="step">
+        <div class="step-head"><span class="step-no">1</span><h2>Material</h2></div>
+        <div class="tiles mat" id="materials" role="group" aria-label="Material"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">2</span><h2>Typ av fräs</h2><span class="step-hint">Vilket frässtål har du?</span></div>
+        <div class="tiles types" id="types" role="group" aria-label="Typ av fräs"></div>
+        <p class="type-blurb" id="type-blurb"></p>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">3</span><h2>Fräsen</h2><span class="step-hint" id="dim-hint">Diameter (mm) och antal skär</span></div>
+        <div id="dims" style="display:grid;gap:12px"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">4</span><h2>Maskin och varvtal</h2></div>
+        <div class="machine">
+          <div class="field">
+            <label class="field-label" for="rpm">Varvtal (rpm)</label>
+            <div class="stepper">
+              <button type="button" data-step="rpm" data-dir="-1" aria-label="Sänk varvtal">−</button>
+              <input id="rpm" type="number" inputmode="numeric" min="3000" max="30000" step="500">
+              <button type="button" data-step="rpm" data-dir="1" aria-label="Höj varvtal">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="maxfeed">Maskinens maxmatning (mm/min)</label>
+            <div class="stepper">
+              <button type="button" data-step="maxfeed" data-dir="-1" aria-label="Sänk maxmatning">−</button>
+              <input id="maxfeed" type="number" inputmode="numeric" min="300" max="30000" step="100">
+              <button type="button" data-step="maxfeed" data-dir="1" aria-label="Höj maxmatning">+</button>
+            </div>
+          </div>
+        </div>
+        <p class="note" id="rpm-note"></p>
+      </div>
+    </section>
+
+    <div class="result-col">
+      <section class="panel result" id="result" aria-live="polite" aria-label="Resultat">
+        <div>
+          <div class="r-label">Matning</div>
+          <div class="feed"><span class="feed-num" id="feed">–</span><span class="feed-unit">mm/min</span></div>
+          <p class="r-sub" id="summary"></p>
+        </div>
+
+        <div class="gauge">
+          <div class="gauge-track"><div class="gauge-mark" id="mark" style="left:50%"></div></div>
+          <div class="gauge-legend" id="legend"><span>För lite</span><span>Rätt chipload</span><span>För mycket</span></div>
+        </div>
+
+        <div class="callout" id="callout" hidden></div>
+
+        <dl class="kv" id="kv"></dl>
+
+        <div class="article" id="article"></div>
+
+        <div class="own">
+          <label class="own-toggle"><input type="checkbox" id="own-on"> Kontrollera min egen matning</label>
+          <div class="stepper" id="own-wrap" hidden>
+            <button type="button" data-step="own" data-dir="-1" aria-label="Sänk egen matning">−</button>
+            <input id="own" type="number" inputmode="numeric" min="50" max="30000" step="50" aria-label="Egen matning i mm/min">
+            <button type="button" data-step="own" data-dir="1" aria-label="Höj egen matning">+</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn" id="copy">Kopiera värden</button>
+          <span class="toast" id="toast" role="status"></span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="src" id="source"></footer>
+</div>
+
+<button type="button" class="dock" id="dock" aria-label="Visa resultat">
+  <span><span class="dot" id="dock-dot"></span><b id="dock-feed">–</b> <span class="d-sub">mm/min</span></span>
+  <span class="d-sub" id="dock-sub"></span>
+</button>
+
+<script>
+// Genererad av scripts/extract_vtdb.py från verkstaden5-vectric-hobby.vtdb – redigera inte för hand.
+window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstaden 5","notes":"Databas över samtliga av Verkstaden 5s frässtål. Benämningar följer varukoderna exakt och det är dessa som står på förpackningen för frässtålet.\n\nUtbudet hittar du på: https://verkstaden5.com/collections/all\n\nVersion 2.8.1  Profil: Hobbymaskin\nMaterial: hårt trä, mjukt träslag/plywood, MDF/spånskiva, melamin, akryl, hård plast, mjuk plast, aluminium och FR4/PCB.\n\nStartvärden för provfräsning. Justera efter din maskin, uppspänning och material.","tools":[{"code":"UC-AL-1F-D3.175-L12-A4","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"aluminium":{"feed":1080.0,"plunge":216.0,"rpm":12000,"stepdown":0.437,"stepover":0.952,"chip":0.09,"chipSource":"db"}}},{"code":"UC-AL-1F-D3.175-L17-A5","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"aluminium":{"feed":1080.0,"plunge":216.0,"rpm":12000,"stepdown":0.437,"stepover":0.952,"chip":0.09,"chipSource":"db"}}},{"code":"UC-AL-1F-D3.175-L22-A6","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"aluminium":{"feed":1080.0,"plunge":216.0,"rpm":12000,"stepdown":0.437,"stepover":0.952,"chip":0.09,"chipSource":"db"}}},{"code":"UC-AL-1F-D6.0-L22-A7","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"aluminium":{"feed":1290.0,"plunge":258.0,"rpm":10000,"stepdown":0.825,"stepover":1.8,"chip":0.129,"chipSource":"db"}}},{"code":"UC-AL-1F-D6.0-L25-A8","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":25.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"aluminium":{"feed":1290.0,"plunge":258.0,"rpm":10000,"stepdown":0.825,"stepover":1.8,"chip":0.129,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D3.175-L12-A9","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"aluminium":{"feed":1080.0,"plunge":216.0,"rpm":12000,"stepdown":0.437,"stepover":0.952,"chip":0.09,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D3.175-L22-A10","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"aluminium":{"feed":1080.0,"plunge":216.0,"rpm":12000,"stepdown":0.437,"stepover":0.952,"chip":0.09,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D6.0-L22-A11","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"aluminium":{"feed":1290.0,"plunge":258.0,"rpm":10000,"stepdown":0.825,"stepover":1.8,"chip":0.129,"chipSource":"db"}}},{"code":"UC-AL-1F-D2.0-L6-A7b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"aluminium":{"feed":792.0,"plunge":158.0,"rpm":12000,"stepdown":0.275,"stepover":0.6,"chip":0.066,"chipSource":"db"}}},{"code":"UC-AL-1F-D2.0-L12-A8b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"aluminium":{"feed":792.0,"plunge":158.0,"rpm":12000,"stepdown":0.275,"stepover":0.6,"chip":0.066,"chipSource":"db"}}},{"code":"UC-AL-1F-D4.0-L12-A9b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"softplastic":{"feed":1440.0,"plunge":360.0,"rpm":12000,"stepdown":0.8,"stepover":1.2,"chip":0.12,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"},"aluminium":{"feed":1224.0,"plunge":245.0,"rpm":12000,"stepdown":0.55,"stepover":1.2,"chip":0.102,"chipSource":"db"}}},{"code":"UC-AL-1F-D4.0-L22-A10b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"softplastic":{"feed":1440.0,"plunge":360.0,"rpm":12000,"stepdown":0.8,"stepover":1.2,"chip":0.12,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"},"aluminium":{"feed":1224.0,"plunge":245.0,"rpm":12000,"stepdown":0.55,"stepover":1.2,"chip":0.102,"chipSource":"db"}}},{"code":"UC-AL-1F-D6.0-L32-A11b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"aluminium":{"feed":1290.0,"plunge":258.0,"rpm":10000,"stepdown":0.825,"stepover":1.8,"chip":0.129,"chipSource":"db"}}},{"code":"UC-AL-1F-D8.0-L22-B1b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":8.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2110.0,"plunge":528.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.211,"chipSource":"db"},"softplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.6,"stepover":2.4,"chip":0.25,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.25,"chipSource":"db"},"aluminium":{"feed":1630.0,"plunge":326.0,"rpm":10000,"stepdown":1.1,"stepover":2.4,"chip":0.163,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D2.0-L6-B2b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"aluminium":{"feed":792.0,"plunge":158.0,"rpm":12000,"stepdown":0.275,"stepover":0.6,"chip":0.066,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D2.0-L12-B3b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"aluminium":{"feed":792.0,"plunge":158.0,"rpm":12000,"stepdown":0.275,"stepover":0.6,"chip":0.066,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D4.0-L12-B4b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"softplastic":{"feed":1440.0,"plunge":360.0,"rpm":12000,"stepdown":0.8,"stepover":1.2,"chip":0.12,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"},"aluminium":{"feed":1224.0,"plunge":245.0,"rpm":12000,"stepdown":0.55,"stepover":1.2,"chip":0.102,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D5.0-L12-B5b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":5.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":1460.0,"plunge":365.0,"rpm":10000,"stepdown":0.813,"stepover":1.5,"chip":0.146,"chipSource":"db"},"softplastic":{"feed":1470.0,"plunge":368.0,"rpm":10000,"stepdown":1.0,"stepover":1.5,"chip":0.147,"chipSource":"db"},"acrylic":{"feed":1760.0,"plunge":440.0,"rpm":10000,"stepdown":0.875,"stepover":1.5,"chip":0.176,"chipSource":"db"},"aluminium":{"feed":1150.0,"plunge":230.0,"rpm":10000,"stepdown":0.688,"stepover":1.5,"chip":0.115,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D6.0-L32-B6b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"aluminium":{"feed":1290.0,"plunge":258.0,"rpm":10000,"stepdown":0.825,"stepover":1.8,"chip":0.129,"chipSource":"db"}}},{"code":"UC-AL-DLC-1F-D8.0-L22-B7b","group":"Aluminiumfräsar, 1-skäriga","type":"upcut","vtype":1,"d":8.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"hardplastic":{"feed":2110.0,"plunge":528.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.211,"chipSource":"db"},"softplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.6,"stepover":2.4,"chip":0.25,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.25,"chipSource":"db"},"aluminium":{"feed":1630.0,"plunge":326.0,"rpm":10000,"stepdown":1.1,"stepover":2.4,"chip":0.163,"chipSource":"db"}}},{"code":"RB-2F-D10-F4b","group":"Avrundningsfräsar","type":"roundover","vtype":2,"d":10.0,"flutes":2,"len":11.0,"angle":null,"tip":null,"radius":5.0,"dlc":false,"cuts":{"softwood":{"feed":1820.0,"plunge":637.0,"rpm":10000,"stepdown":0.7,"stepover":0.3,"chip":0.091,"chipSource":"db"},"hardwood":{"feed":1640.0,"plunge":574.0,"rpm":10000,"stepdown":0.7,"stepover":0.3,"chip":0.082,"chipSource":"db"},"mdf":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.7,"stepover":0.3,"chip":0.093,"chipSource":"db"},"melamine":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.7,"stepover":0.3,"chip":0.093,"chipSource":"db"}}},{"code":"RB-2F-D16-F5b","group":"Avrundningsfräsar","type":"roundover","vtype":2,"d":16.0,"flutes":2,"len":11.0,"angle":null,"tip":null,"radius":8.0,"dlc":false,"cuts":{"softwood":{"feed":1820.0,"plunge":637.0,"rpm":10000,"stepdown":1.12,"stepover":0.48,"chip":0.091,"chipSource":"db"},"hardwood":{"feed":1640.0,"plunge":574.0,"rpm":10000,"stepdown":1.12,"stepover":0.48,"chip":0.082,"chipSource":"db"},"mdf":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":1.12,"stepover":0.48,"chip":0.093,"chipSource":"db"},"melamine":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":1.12,"stepover":0.48,"chip":0.093,"chipSource":"db"}}},{"code":"RB-2F-D22-F6b","group":"Avrundningsfräsar","type":"roundover","vtype":2,"d":22.0,"flutes":2,"len":15.0,"angle":null,"tip":null,"radius":11.0,"dlc":false,"cuts":{"softwood":{"feed":1820.0,"plunge":637.0,"rpm":10000,"stepdown":1.54,"stepover":0.66,"chip":0.091,"chipSource":"db"},"hardwood":{"feed":1640.0,"plunge":574.0,"rpm":10000,"stepdown":1.54,"stepover":0.66,"chip":0.082,"chipSource":"db"},"mdf":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":1.54,"stepover":0.66,"chip":0.093,"chipSource":"db"},"melamine":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":1.54,"stepover":0.66,"chip":0.093,"chipSource":"db"}}},{"code":"RBB-2F-D1/4-R1/4-F1b","group":"Avrundningsfräsar","type":"roundover","vtype":2,"d":6.35,"flutes":2,"len":null,"angle":null,"tip":null,"radius":6.35,"dlc":false,"cuts":{"softwood":{"feed":1820.0,"plunge":637.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.091,"chipSource":"db"},"hardwood":{"feed":1640.0,"plunge":574.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.082,"chipSource":"db"},"mdf":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.093,"chipSource":"db"},"melamine":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.093,"chipSource":"db"}}},{"code":"RBB-2F-D1/4-R3/16-F2b","group":"Avrundningsfräsar","type":"roundover","vtype":2,"d":6.35,"flutes":2,"len":null,"angle":null,"tip":null,"radius":4.76,"dlc":false,"cuts":{"softwood":{"feed":1820.0,"plunge":637.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.091,"chipSource":"db"},"hardwood":{"feed":1640.0,"plunge":574.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.082,"chipSource":"db"},"mdf":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.093,"chipSource":"db"},"melamine":{"feed":1860.0,"plunge":651.0,"rpm":10000,"stepdown":0.445,"stepover":0.191,"chip":0.093,"chipSource":"db"}}},{"code":"BN-2F-D3.175-L24-R1.5-B6","group":"Kulfräsar","type":"ball","vtype":2,"d":3.175,"flutes":2,"len":24.0,"angle":null,"tip":null,"radius":1.5,"dlc":false,"cuts":{"hardplastic":{"feed":1052.0,"plunge":316.0,"rpm":12000,"stepdown":0.155,"stepover":0.191,"chip":0.044,"chipSource":"db"},"softplastic":{"feed":1465.0,"plunge":440.0,"rpm":12000,"stepdown":0.19,"stepover":0.191,"chip":0.061,"chipSource":"db"},"acrylic":{"feed":1414.0,"plunge":424.0,"rpm":12000,"stepdown":0.167,"stepover":0.191,"chip":0.059,"chipSource":"db"},"softwood":{"feed":1952.0,"plunge":586.0,"rpm":12000,"stepdown":0.31,"stepover":0.191,"chip":0.081,"chipSource":"db"},"hardwood":{"feed":1402.0,"plunge":421.0,"rpm":12000,"stepdown":0.238,"stepover":0.191,"chip":0.058,"chipSource":"db"},"mdf":{"feed":2334.0,"plunge":700.0,"rpm":12000,"stepdown":0.357,"stepover":0.191,"chip":0.097,"chipSource":"db"},"melamine":{"feed":2334.0,"plunge":700.0,"rpm":12000,"stepdown":0.357,"stepover":0.191,"chip":0.097,"chipSource":"db"},"aluminium":{"feed":1584.0,"plunge":475.0,"rpm":12000,"stepdown":0.131,"stepover":0.191,"chip":0.066,"chipSource":"db"}}},{"code":"BN-2F-D3.175-L32-R1.5-B7","group":"Kulfräsar","type":"ball","vtype":2,"d":3.175,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":1.5,"dlc":false,"cuts":{"hardplastic":{"feed":1052.0,"plunge":316.0,"rpm":12000,"stepdown":0.155,"stepover":0.191,"chip":0.044,"chipSource":"db"},"softplastic":{"feed":1465.0,"plunge":440.0,"rpm":12000,"stepdown":0.19,"stepover":0.191,"chip":0.061,"chipSource":"db"},"acrylic":{"feed":1414.0,"plunge":424.0,"rpm":12000,"stepdown":0.167,"stepover":0.191,"chip":0.059,"chipSource":"db"},"softwood":{"feed":1952.0,"plunge":586.0,"rpm":12000,"stepdown":0.31,"stepover":0.191,"chip":0.081,"chipSource":"db"},"hardwood":{"feed":1402.0,"plunge":421.0,"rpm":12000,"stepdown":0.238,"stepover":0.191,"chip":0.058,"chipSource":"db"},"mdf":{"feed":2334.0,"plunge":700.0,"rpm":12000,"stepdown":0.357,"stepover":0.191,"chip":0.097,"chipSource":"db"},"melamine":{"feed":2334.0,"plunge":700.0,"rpm":12000,"stepdown":0.357,"stepover":0.191,"chip":0.097,"chipSource":"db"},"aluminium":{"feed":1584.0,"plunge":475.0,"rpm":12000,"stepdown":0.131,"stepover":0.191,"chip":0.066,"chipSource":"db"}}},{"code":"BN-2F-D6.0-L12-R3-B8","group":"Kulfräsar","type":"ball","vtype":2,"d":6.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":3.0,"dlc":false,"cuts":{"hardplastic":{"feed":1702.0,"plunge":511.0,"rpm":10000,"stepdown":0.293,"stepover":0.36,"chip":0.085,"chipSource":"db"},"softplastic":{"feed":2344.0,"plunge":703.0,"rpm":10000,"stepdown":0.36,"stepover":0.36,"chip":0.117,"chipSource":"db"},"acrylic":{"feed":2286.0,"plunge":686.0,"rpm":10000,"stepdown":0.315,"stepover":0.36,"chip":0.114,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.585,"stepover":0.36,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.45,"stepover":0.36,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"aluminium":{"feed":1837.0,"plunge":551.0,"rpm":10000,"stepdown":0.248,"stepover":0.36,"chip":0.092,"chipSource":"db"}}},{"code":"BN-2F-D6.0-L22-R3-B9","group":"Kulfräsar","type":"ball","vtype":2,"d":6.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":3.0,"dlc":false,"cuts":{"hardplastic":{"feed":1702.0,"plunge":511.0,"rpm":10000,"stepdown":0.293,"stepover":0.36,"chip":0.085,"chipSource":"db"},"softplastic":{"feed":2344.0,"plunge":703.0,"rpm":10000,"stepdown":0.36,"stepover":0.36,"chip":0.117,"chipSource":"db"},"acrylic":{"feed":2286.0,"plunge":686.0,"rpm":10000,"stepdown":0.315,"stepover":0.36,"chip":0.114,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.585,"stepover":0.36,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.45,"stepover":0.36,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"aluminium":{"feed":1837.0,"plunge":551.0,"rpm":10000,"stepdown":0.248,"stepover":0.36,"chip":0.092,"chipSource":"db"}}},{"code":"BN-2F-D2.0-L6-R1-C3b","group":"Kulfräsar","type":"ball","vtype":2,"d":2.0,"flutes":2,"len":6.0,"angle":null,"tip":null,"radius":1.0,"dlc":false,"cuts":{"hardplastic":{"feed":664.0,"plunge":199.0,"rpm":12000,"stepdown":0.098,"stepover":0.12,"chip":0.028,"chipSource":"db"},"softplastic":{"feed":917.0,"plunge":275.0,"rpm":12000,"stepdown":0.12,"stepover":0.12,"chip":0.038,"chipSource":"db"},"acrylic":{"feed":895.0,"plunge":268.0,"rpm":12000,"stepdown":0.105,"stepover":0.12,"chip":0.037,"chipSource":"db"},"softwood":{"feed":1217.0,"plunge":365.0,"rpm":12000,"stepdown":0.195,"stepover":0.12,"chip":0.051,"chipSource":"db"},"hardwood":{"feed":857.0,"plunge":257.0,"rpm":12000,"stepdown":0.15,"stepover":0.12,"chip":0.036,"chipSource":"db"},"mdf":{"feed":1451.0,"plunge":435.0,"rpm":12000,"stepdown":0.225,"stepover":0.12,"chip":0.06,"chipSource":"db"},"melamine":{"feed":1451.0,"plunge":435.0,"rpm":12000,"stepdown":0.225,"stepover":0.12,"chip":0.06,"chipSource":"db"},"aluminium":{"feed":1584.0,"plunge":475.0,"rpm":12000,"stepdown":0.083,"stepover":0.12,"chip":0.066,"chipSource":"db"}}},{"code":"BN-2F-D2-L12-R1-C4b","group":"Kulfräsar","type":"ball","vtype":2,"d":2.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":1.0,"dlc":false,"cuts":{"hardplastic":{"feed":664.0,"plunge":199.0,"rpm":12000,"stepdown":0.098,"stepover":0.12,"chip":0.028,"chipSource":"db"},"softplastic":{"feed":917.0,"plunge":275.0,"rpm":12000,"stepdown":0.12,"stepover":0.12,"chip":0.038,"chipSource":"db"},"acrylic":{"feed":895.0,"plunge":268.0,"rpm":12000,"stepdown":0.105,"stepover":0.12,"chip":0.037,"chipSource":"db"},"softwood":{"feed":1217.0,"plunge":365.0,"rpm":12000,"stepdown":0.195,"stepover":0.12,"chip":0.051,"chipSource":"db"},"hardwood":{"feed":857.0,"plunge":257.0,"rpm":12000,"stepdown":0.15,"stepover":0.12,"chip":0.036,"chipSource":"db"},"mdf":{"feed":1451.0,"plunge":435.0,"rpm":12000,"stepdown":0.225,"stepover":0.12,"chip":0.06,"chipSource":"db"},"melamine":{"feed":1451.0,"plunge":435.0,"rpm":12000,"stepdown":0.225,"stepover":0.12,"chip":0.06,"chipSource":"db"},"aluminium":{"feed":1584.0,"plunge":475.0,"rpm":12000,"stepdown":0.083,"stepover":0.12,"chip":0.066,"chipSource":"db"}}},{"code":"BN-2F-D4.0-L12-R2-C5b","group":"Kulfräsar","type":"ball","vtype":2,"d":4.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":2.0,"dlc":false,"cuts":{"hardplastic":{"feed":1265.0,"plunge":379.0,"rpm":12000,"stepdown":0.195,"stepover":0.24,"chip":0.053,"chipSource":"db"},"softplastic":{"feed":1881.0,"plunge":564.0,"rpm":12000,"stepdown":0.24,"stepover":0.24,"chip":0.078,"chipSource":"db"},"acrylic":{"feed":1678.0,"plunge":504.0,"rpm":12000,"stepdown":0.21,"stepover":0.24,"chip":0.07,"chipSource":"db"},"softwood":{"feed":2480.0,"plunge":744.0,"rpm":12000,"stepdown":0.39,"stepover":0.24,"chip":0.103,"chipSource":"db"},"hardwood":{"feed":1847.0,"plunge":554.0,"rpm":12000,"stepdown":0.3,"stepover":0.24,"chip":0.077,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":750.0,"rpm":12000,"stepdown":0.45,"stepover":0.24,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":750.0,"rpm":12000,"stepdown":0.45,"stepover":0.24,"chip":0.104,"chipSource":"db"},"aluminium":{"feed":1683.0,"plunge":505.0,"rpm":12000,"stepdown":0.165,"stepover":0.24,"chip":0.07,"chipSource":"db"}}},{"code":"BN-2F-D4.0-L22-R2-C6b","group":"Kulfräsar","type":"ball","vtype":2,"d":4.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":2.0,"dlc":false,"cuts":{"hardplastic":{"feed":1265.0,"plunge":379.0,"rpm":12000,"stepdown":0.195,"stepover":0.24,"chip":0.053,"chipSource":"db"},"softplastic":{"feed":1881.0,"plunge":564.0,"rpm":12000,"stepdown":0.24,"stepover":0.24,"chip":0.078,"chipSource":"db"},"acrylic":{"feed":1678.0,"plunge":504.0,"rpm":12000,"stepdown":0.21,"stepover":0.24,"chip":0.07,"chipSource":"db"},"softwood":{"feed":2480.0,"plunge":744.0,"rpm":12000,"stepdown":0.39,"stepover":0.24,"chip":0.103,"chipSource":"db"},"hardwood":{"feed":1847.0,"plunge":554.0,"rpm":12000,"stepdown":0.3,"stepover":0.24,"chip":0.077,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":750.0,"rpm":12000,"stepdown":0.45,"stepover":0.24,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":750.0,"rpm":12000,"stepdown":0.45,"stepover":0.24,"chip":0.104,"chipSource":"db"},"aluminium":{"feed":1683.0,"plunge":505.0,"rpm":12000,"stepdown":0.165,"stepover":0.24,"chip":0.07,"chipSource":"db"}}},{"code":"BN-2F-D6.0-L32-R3-C7b","group":"Kulfräsar","type":"ball","vtype":2,"d":6.0,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":3.0,"dlc":false,"cuts":{"hardplastic":{"feed":1702.0,"plunge":511.0,"rpm":10000,"stepdown":0.293,"stepover":0.36,"chip":0.085,"chipSource":"db"},"softplastic":{"feed":2344.0,"plunge":703.0,"rpm":10000,"stepdown":0.36,"stepover":0.36,"chip":0.117,"chipSource":"db"},"acrylic":{"feed":2286.0,"plunge":686.0,"rpm":10000,"stepdown":0.315,"stepover":0.36,"chip":0.114,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.585,"stepover":0.36,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.45,"stepover":0.36,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":750.0,"rpm":10000,"stepdown":0.675,"stepover":0.36,"chip":0.125,"chipSource":"db"},"aluminium":{"feed":1837.0,"plunge":551.0,"rpm":10000,"stepdown":0.248,"stepover":0.36,"chip":0.092,"chipSource":"db"}}},{"code":"FT-2F-D12.7-L38-F10b","group":"Kopierfräsar","type":"flush","vtype":1,"d":12.7,"flutes":2,"len":38.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.588,"stepover":0.762,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2400.0,"plunge":800.0,"rpm":10000,"stepdown":1.588,"stepover":0.762,"chip":0.12,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.588,"stepover":0.762,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.588,"stepover":0.762,"chip":0.125,"chipSource":"db"}}},{"code":"UC-PL-1F-D3.175-L12-B1","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"}}},{"code":"UC-PL-1F-D3.175-L17-B2","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"}}},{"code":"UC-PL-1F-D3.175-L22-B3","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"softplastic":{"feed":1164.0,"plunge":291.0,"rpm":12000,"stepdown":0.635,"stepover":0.952,"chip":0.097,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"}}},{"code":"UC-PL-1F-D6.0-L22-B4","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"}}},{"code":"UC-PL-1F-D6.0-L25-B5","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":1,"len":25.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"softplastic":{"feed":1750.0,"plunge":438.0,"rpm":10000,"stepdown":1.2,"stepover":1.8,"chip":0.175,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"}}},{"code":"UC-PL-1F-D2.0-L6-B8b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"}}},{"code":"UC-PL-1F-D2.0-L12-B9b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"softplastic":{"feed":708.0,"plunge":177.0,"rpm":12000,"stepdown":0.4,"stepover":0.6,"chip":0.059,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"}}},{"code":"UC-PL-1F-D4.0-L12-B10b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"softplastic":{"feed":1440.0,"plunge":360.0,"rpm":12000,"stepdown":0.8,"stepover":1.2,"chip":0.12,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"}}},{"code":"UC-PL-1F-D4.0-L22-B11b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"softplastic":{"feed":1440.0,"plunge":360.0,"rpm":12000,"stepdown":0.8,"stepover":1.2,"chip":0.12,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"}}},{"code":"UC-PL-1F-D8.0-L22-C2b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":8.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2110.0,"plunge":528.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.211,"chipSource":"db"},"softplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.6,"stepover":2.4,"chip":0.25,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.25,"chipSource":"db"}}},{"code":"UC-PL-1F-D5.0-L17-C1b","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":5.0,"flutes":1,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1460.0,"plunge":365.0,"rpm":10000,"stepdown":0.813,"stepover":1.5,"chip":0.146,"chipSource":"db"},"softplastic":{"feed":1470.0,"plunge":368.0,"rpm":10000,"stepdown":1.0,"stepover":1.5,"chip":0.147,"chipSource":"db"},"acrylic":{"feed":1760.0,"plunge":440.0,"rpm":10000,"stepdown":0.875,"stepover":1.5,"chip":0.176,"chipSource":"db"}}},{"code":"UC-PL-1F-D1.5-L6-B10","group":"Plastfräsar O-flute, 1-skäriga","type":"upcut","vtype":1,"d":1.5,"flutes":1,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":420.0,"plunge":105.0,"rpm":12000,"stepdown":0.244,"stepover":0.45,"chip":0.035,"chipSource":"db"},"softplastic":{"feed":528.0,"plunge":132.0,"rpm":12000,"stepdown":0.3,"stepover":0.45,"chip":0.044,"chipSource":"db"},"acrylic":{"feed":546.0,"plunge":137.0,"rpm":12000,"stepdown":0.262,"stepover":0.45,"chip":0.046,"chipSource":"db"}}},{"code":"TB-2F-D6.0-R0.25-20°-E1","group":"Koniska radiefräsar","type":"tapered","vtype":5,"d":6.0,"flutes":2,"len":null,"angle":12.6,"tip":null,"radius":0.25,"dlc":false,"cuts":{"acrylic":{"feed":1796.0,"plunge":449.0,"rpm":12000,"stepdown":0.21,"stepover":0.1,"chip":0.075,"chipSource":"db"},"softwood":{"feed":2408.0,"plunge":602.0,"rpm":12000,"stepdown":0.39,"stepover":0.1,"chip":0.1,"chipSource":"db"},"hardwood":{"feed":2000.0,"plunge":500.0,"rpm":12000,"stepdown":0.3,"stepover":0.1,"chip":0.083,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.1,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.1,"chip":0.104,"chipSource":"db"}}},{"code":"TB-2F-D6.0-R0.5-20°-E2","group":"Koniska radiefräsar","type":"tapered","vtype":5,"d":6.0,"flutes":2,"len":null,"angle":11.6,"tip":null,"radius":0.5,"dlc":false,"cuts":{"acrylic":{"feed":1796.0,"plunge":449.0,"rpm":10000,"stepdown":0.21,"stepover":0.2,"chip":0.09,"chipSource":"db"},"softwood":{"feed":2408.0,"plunge":602.0,"rpm":10000,"stepdown":0.39,"stepover":0.2,"chip":0.12,"chipSource":"db"},"hardwood":{"feed":2000.0,"plunge":500.0,"rpm":10000,"stepdown":0.3,"stepover":0.2,"chip":0.1,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.45,"stepover":0.2,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.45,"stepover":0.2,"chip":0.125,"chipSource":"db"}}},{"code":"TB-2F-D6.0-R0.75-20°-E3","group":"Koniska radiefräsar","type":"tapered","vtype":5,"d":6.0,"flutes":2,"len":null,"angle":10.6,"tip":null,"radius":0.75,"dlc":false,"cuts":{"acrylic":{"feed":1796.0,"plunge":449.0,"rpm":12000,"stepdown":0.21,"stepover":0.3,"chip":0.075,"chipSource":"db"},"softwood":{"feed":2408.0,"plunge":602.0,"rpm":12000,"stepdown":0.39,"stepover":0.3,"chip":0.1,"chipSource":"db"},"hardwood":{"feed":2000.0,"plunge":500.0,"rpm":12000,"stepdown":0.3,"stepover":0.3,"chip":0.083,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.3,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.3,"chip":0.104,"chipSource":"db"}}},{"code":"TB-2F-D6.0-R1-20°-E4","group":"Koniska radiefräsar","type":"tapered","vtype":5,"d":6.0,"flutes":2,"len":null,"angle":9.6,"tip":null,"radius":1.0,"dlc":false,"cuts":{"acrylic":{"feed":1796.0,"plunge":449.0,"rpm":12000,"stepdown":0.21,"stepover":0.4,"chip":0.075,"chipSource":"db"},"softwood":{"feed":2408.0,"plunge":602.0,"rpm":12000,"stepdown":0.39,"stepover":0.4,"chip":0.1,"chipSource":"db"},"hardwood":{"feed":2000.0,"plunge":500.0,"rpm":12000,"stepdown":0.3,"stepover":0.4,"chip":0.083,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.4,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.45,"stepover":0.4,"chip":0.104,"chipSource":"db"}}},{"code":"DC-1F-D3.175-L10-A1","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":3.175,"flutes":1,"len":10.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":1242.0,"plunge":435.0,"rpm":12000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1044.0,"plunge":365.0,"rpm":12000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":1410.0,"plunge":493.0,"rpm":12000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":1410.0,"plunge":493.0,"rpm":12000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"DC-1F-D3.175-L15-A2","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":3.175,"flutes":1,"len":15.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":792.0,"plunge":198.0,"rpm":12000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1020.0,"plunge":255.0,"rpm":12000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":1242.0,"plunge":435.0,"rpm":12000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1044.0,"plunge":365.0,"rpm":12000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":1410.0,"plunge":493.0,"rpm":12000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":1410.0,"plunge":493.0,"rpm":12000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"DC-1F-D6.0-L22-A3","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":6.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2208.0,"plunge":552.0,"rpm":12000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":1.05,"stepover":1.8,"chip":0.208,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.95,"stepover":1.8,"chip":0.208,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.8,"chip":0.208,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":2.25,"stepover":1.8,"chip":0.208,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":2.25,"stepover":1.8,"chip":0.208,"chipSource":"db"}}},{"code":"DC-1F-D2.0-L6-A1b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":2.0,"flutes":1,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":558.0,"plunge":140.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"acrylic":{"feed":726.0,"plunge":182.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"softwood":{"feed":768.0,"plunge":269.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":600.0,"plunge":210.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":864.0,"plunge":302.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":864.0,"plunge":302.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"DC-1F-D4.0-L12-A2b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":4.0,"flutes":1,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"},"softwood":{"feed":2040.0,"plunge":714.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.17,"chipSource":"db"},"hardwood":{"feed":1704.0,"plunge":596.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.142,"chipSource":"db"},"mdf":{"feed":2376.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.198,"chipSource":"db"},"melamine":{"feed":2376.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.198,"chipSource":"db"}}},{"code":"DC-1F-D4.0-L22-A3b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":4.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1284.0,"plunge":321.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.107,"chipSource":"db"},"acrylic":{"feed":1596.0,"plunge":399.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.133,"chipSource":"db"},"softwood":{"feed":2040.0,"plunge":714.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.17,"chipSource":"db"},"hardwood":{"feed":1704.0,"plunge":596.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.142,"chipSource":"db"},"mdf":{"feed":2376.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.198,"chipSource":"db"},"melamine":{"feed":2376.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.198,"chipSource":"db"}}},{"code":"DC-1F-D6.0-L32-A4b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":6.0,"flutes":1,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1840.0,"plunge":460.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.184,"chipSource":"db"},"acrylic":{"feed":2185.0,"plunge":546.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.219,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2435.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.244,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.25,"chipSource":"db"}}},{"code":"DC-1F-D8.0-L22-A5b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":8.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2110.0,"plunge":528.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.211,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.25,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.6,"stepover":2.4,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.0,"stepover":2.4,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.25,"chipSource":"db"}}},{"code":"DC-1F-D10.0-L22-A6b","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":10.0,"flutes":1,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.625,"stepover":3.0,"chip":0.25,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.75,"stepover":3.0,"chip":0.25,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.25,"stepover":3.0,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.5,"stepover":3.0,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.75,"stepover":3.0,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.75,"stepover":3.0,"chip":0.25,"chipSource":"db"}}},{"code":"DC-1F-D5.0-L15-C10","group":"Nedåtskärande fräsar, 1-skäriga","type":"downcut","vtype":1,"d":5.0,"flutes":1,"len":15.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1460.0,"plunge":365.0,"rpm":10000,"stepdown":0.813,"stepover":1.5,"chip":0.146,"chipSource":"db"},"acrylic":{"feed":1760.0,"plunge":440.0,"rpm":10000,"stepdown":0.875,"stepover":1.5,"chip":0.176,"chipSource":"db"},"softwood":{"feed":2310.0,"plunge":800.0,"rpm":10000,"stepdown":1.625,"stepover":1.5,"chip":0.231,"chipSource":"db"},"hardwood":{"feed":1925.0,"plunge":674.0,"rpm":10000,"stepdown":1.25,"stepover":1.5,"chip":0.193,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.875,"stepover":1.5,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.875,"stepover":1.5,"chip":0.25,"chipSource":"db"}}},{"code":"V-D3.175-TD0.1-20°-F1","group":"V-bitar","type":"vbit","vtype":4,"d":3.175,"flutes":1,"len":null,"angle":20.0,"tip":0.1,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1889.0,"plunge":472.0,"rpm":10000,"stepdown":0.165,"stepover":0.04,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2439.0,"plunge":610.0,"rpm":10000,"stepdown":0.178,"stepover":0.04,"chip":0.244,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.33,"stepover":0.04,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.254,"stepover":0.04,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.381,"stepover":0.04,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.381,"stepover":0.04,"chip":0.25,"chipSource":"db"}}},{"code":"V-D3.175-TD0.2-20°-F2","group":"V-bitar","type":"vbit","vtype":4,"d":3.175,"flutes":1,"len":null,"angle":20.0,"tip":0.2,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1889.0,"plunge":472.0,"rpm":10000,"stepdown":0.165,"stepover":0.08,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2439.0,"plunge":610.0,"rpm":10000,"stepdown":0.178,"stepover":0.08,"chip":0.244,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.33,"stepover":0.08,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.254,"stepover":0.08,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.381,"stepover":0.08,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.381,"stepover":0.08,"chip":0.25,"chipSource":"db"}}},{"code":"V-D6.0-TD0.1-30°-F3","group":"V-bitar","type":"vbit","vtype":4,"d":6.0,"flutes":1,"len":null,"angle":30.0,"tip":0.1,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1888.0,"plunge":472.0,"rpm":10000,"stepdown":0.312,"stepover":0.04,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2245.0,"plunge":561.0,"rpm":10000,"stepdown":0.336,"stepover":0.04,"chip":0.225,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.624,"stepover":0.04,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.48,"stepover":0.04,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"}}},{"code":"V-D6.0-TD0.2-30°-F4","group":"V-bitar","type":"vbit","vtype":4,"d":6.0,"flutes":1,"len":null,"angle":30.0,"tip":0.2,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1888.0,"plunge":472.0,"rpm":10000,"stepdown":0.312,"stepover":0.08,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2245.0,"plunge":561.0,"rpm":10000,"stepdown":0.336,"stepover":0.08,"chip":0.225,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.624,"stepover":0.08,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.48,"stepover":0.08,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.08,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.08,"chip":0.25,"chipSource":"db"}}},{"code":"V-D6.0-TD0.1-60°-F5","group":"V-bitar","type":"vbit","vtype":4,"d":6.0,"flutes":1,"len":null,"angle":60.0,"tip":0.1,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1888.0,"plunge":472.0,"rpm":10000,"stepdown":0.312,"stepover":0.04,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2245.0,"plunge":561.0,"rpm":10000,"stepdown":0.336,"stepover":0.04,"chip":0.225,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.624,"stepover":0.04,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.48,"stepover":0.04,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"}}},{"code":"V-D6.0-TD0.1-90°-F12","group":"V-bitar","type":"vbit","vtype":4,"d":6.0,"flutes":1,"len":null,"angle":90.0,"tip":0.1,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1888.0,"plunge":472.0,"rpm":10000,"stepdown":0.312,"stepover":0.04,"chip":0.189,"chipSource":"db"},"acrylic":{"feed":2245.0,"plunge":561.0,"rpm":10000,"stepdown":0.336,"stepover":0.04,"chip":0.225,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.624,"stepover":0.04,"chip":0.25,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.48,"stepover":0.04,"chip":0.25,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.72,"stepover":0.04,"chip":0.25,"chipSource":"db"}}},{"code":"SC-2F-D3.175-L12-D6","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":3.175,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"SC-2F-D3.175-L17-D7","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":3.175,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"SC-2F-D3.175-L22-D8","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":3.175,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"SC-2F-D6.0-L22-D9","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":6.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"SC-2F-D6.0-L25-D10","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":6.0,"flutes":2,"len":25.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"SC-2F-D2.0-L6-E4b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":2.0,"flutes":2,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1116.0,"plunge":279.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"acrylic":{"feed":1452.0,"plunge":363.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"SC-2F-D2.0-L15-E5b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":2.0,"flutes":2,"len":15.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1116.0,"plunge":279.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"acrylic":{"feed":1452.0,"plunge":363.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"SC-2F-D4.0-L12-E6b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":4.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"SC-2F-D4.0-L22-E7b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":4.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"SC-2F-D6.0-L32-E8b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":6.0,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"SC-2F-D8.0-L22-E9b","group":"Notfräsar (raka)","type":"straight","vtype":1,"d":8.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.6,"stepover":2.4,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"}}},{"code":"C-2F-D3.175-L12-C1","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":3.175,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"C-2F-D3.175-L17-C2","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":3.175,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"C-2F-D3.175-L22-C3","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":3.175,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"C-2F-D6.0-L17-C4","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":6.0,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"C-2F-D6.0-L22-C5","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":6.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"C-2F-D4.0-L12-C10b","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":4.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"C-2F-D4.0-L22-C11b","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":4.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"C-2F-D6.0-L32-D1b","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":6.0,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"C-2F-D8.0-L22-D2b","group":"Kompressionsfräsar","type":"compression","vtype":1,"d":8.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.3,"stepover":2.4,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.4,"stepover":2.4,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.6,"stepover":2.4,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"}}},{"code":"DC-2F-D3.175-L17-C6","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":3.175,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"DC-2F-D3.175-L22-C7","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":3.175,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1320.0,"plunge":330.0,"rpm":10000,"stepdown":0.516,"stepover":0.952,"chip":0.066,"chipSource":"db"},"acrylic":{"feed":1700.0,"plunge":425.0,"rpm":10000,"stepdown":0.556,"stepover":0.952,"chip":0.085,"chipSource":"db"},"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"DC-2F-D6.0-L24-C8","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":6.0,"flutes":2,"len":24.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"DC-2F-D2.0-L6-D3b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":2.0,"flutes":2,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1116.0,"plunge":279.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"acrylic":{"feed":1452.0,"plunge":363.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"DC-2F-D2.0-L12-D4b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":2.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":1116.0,"plunge":279.0,"rpm":12000,"stepdown":0.325,"stepover":0.6,"chip":0.047,"chipSource":"db"},"acrylic":{"feed":1452.0,"plunge":363.0,"rpm":12000,"stepdown":0.35,"stepover":0.6,"chip":0.061,"chipSource":"db"},"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"DC-2F-D4.0-L12-D5b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":4.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"DC-2F-D4.0-L22-D6b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":4.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.65,"stepover":1.2,"chip":0.104,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":12000,"stepdown":0.7,"stepover":1.2,"chip":0.104,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"DC-2F-D6.0-L17-D7b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":6.0,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"DC-2F-D6.0-L32-D8b","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":6.0,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":0.975,"stepover":1.8,"chip":0.125,"chipSource":"db"},"acrylic":{"feed":2500.0,"plunge":625.0,"rpm":10000,"stepdown":1.05,"stepover":1.8,"chip":0.125,"chipSource":"db"},"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"DC-2F-D0.6-L3-C9","group":"Nedåtskärande fräsar, 2-skäriga","type":"downcut","vtype":1,"d":0.6,"flutes":2,"len":3.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"hardplastic":{"feed":336.0,"plunge":84.0,"rpm":12000,"stepdown":0.098,"stepover":0.18,"chip":0.014,"chipSource":"db"},"acrylic":{"feed":444.0,"plunge":111.0,"rpm":12000,"stepdown":0.105,"stepover":0.18,"chip":0.019,"chipSource":"db"},"softwood":{"feed":468.0,"plunge":164.0,"rpm":12000,"stepdown":0.195,"stepover":0.18,"chip":0.02,"chipSource":"db"},"hardwood":{"feed":360.0,"plunge":126.0,"rpm":12000,"stepdown":0.15,"stepover":0.18,"chip":0.015,"chipSource":"db"},"mdf":{"feed":528.0,"plunge":185.0,"rpm":12000,"stepdown":0.225,"stepover":0.18,"chip":0.022,"chipSource":"db"},"melamine":{"feed":528.0,"plunge":185.0,"rpm":12000,"stepdown":0.225,"stepover":0.18,"chip":0.022,"chipSource":"db"}}},{"code":"VG-D6.0-90°-F6","group":"V-spårfräsar för ACM","type":"acm","vtype":4,"d":12.7,"flutes":2,"len":null,"angle":90.0,"tip":null,"radius":null,"dlc":false,"cuts":{"acm":{"feed":1216.0,"plunge":243.0,"rpm":16000,"stepdown":1.499,"stepover":1.27,"chip":0.038,"chipSource":"db"}}},{"code":"PCB-D3.175-L12-E6","group":"PCB-fräsar","type":"pcb","vtype":1,"d":3.175,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"fr4":{"feed":1320.0,"plunge":396.0,"rpm":24000,"stepdown":0.476,"stepover":0.762,"chip":0.028,"chipSource":"db"}}},{"code":"PCB-D3.175-L25-E7","group":"PCB-fräsar","type":"pcb","vtype":1,"d":3.175,"flutes":2,"len":25.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"fr4":{"feed":1320.0,"plunge":396.0,"rpm":24000,"stepdown":0.476,"stepover":0.762,"chip":0.028,"chipSource":"db"}}},{"code":"PCB-D6.0-L32-E8","group":"PCB-fräsar","type":"pcb","vtype":1,"d":6.0,"flutes":2,"len":32.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"fr4":{"feed":1680.0,"plunge":504.0,"rpm":24000,"stepdown":0.9,"stepover":1.44,"chip":0.035,"chipSource":"db"}}},{"code":"PCB-DLC-D1.0-L7-E9","group":"PCB-fräsar","type":"pcb","vtype":1,"d":1.0,"flutes":2,"len":7.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"fr4":{"feed":576.0,"plunge":173.0,"rpm":24000,"stepdown":0.15,"stepover":0.24,"chip":0.012,"chipSource":"db"}}},{"code":"PCB-DLC-D1.5-L8-E10","group":"PCB-fräsar","type":"pcb","vtype":1,"d":1.5,"flutes":2,"len":8.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"fr4":{"feed":864.0,"plunge":259.0,"rpm":24000,"stepdown":0.225,"stepover":0.36,"chip":0.018,"chipSource":"db"}}},{"code":"PCB-DLC-D3.175-L12-E11","group":"PCB-fräsar","type":"pcb","vtype":1,"d":3.175,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":true,"cuts":{"fr4":{"feed":1320.0,"plunge":396.0,"rpm":24000,"stepdown":0.476,"stepover":0.762,"chip":0.028,"chipSource":"db"}}},{"code":"UC-2F-D3.175-L12-D1","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"UC-2F-D3.175-L17-D2","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"UC-2F-D3.175-L22-D3","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":3.175,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2070.0,"plunge":725.0,"rpm":10000,"stepdown":1.032,"stepover":0.952,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":1740.0,"plunge":609.0,"rpm":10000,"stepdown":0.794,"stepover":0.952,"chip":0.087,"chipSource":"db"},"mdf":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"},"melamine":{"feed":2350.0,"plunge":800.0,"rpm":10000,"stepdown":1.191,"stepover":0.952,"chip":0.118,"chipSource":"db"}}},{"code":"UC-2F-D6.0-L17-D4","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"UC-2F-D6.0-L22-D5","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"UC-2F-D2.0-L6-D9b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":2,"len":6.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"UC-2F-D2.0-L12-D10b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":2.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":1536.0,"plunge":538.0,"rpm":12000,"stepdown":0.65,"stepover":0.6,"chip":0.064,"chipSource":"db"},"hardwood":{"feed":1200.0,"plunge":420.0,"rpm":12000,"stepdown":0.5,"stepover":0.6,"chip":0.05,"chipSource":"db"},"mdf":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"},"melamine":{"feed":1728.0,"plunge":605.0,"rpm":12000,"stepdown":0.75,"stepover":0.6,"chip":0.072,"chipSource":"db"}}},{"code":"UC-2F-D4.0-L12-D11b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":2,"len":12.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"UC-2F-D4.0-L22-E1b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":4.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.3,"stepover":1.2,"chip":0.104,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.0,"stepover":1.2,"chip":0.104,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":12000,"stepdown":1.5,"stepover":1.2,"chip":0.104,"chipSource":"db"}}},{"code":"UC-2F-D6.0-L45-E2b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":2,"len":45.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"UC-2F-D6.0-L52-F8","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":6.0,"flutes":2,"len":52.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.95,"stepover":1.8,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":1.5,"stepover":1.8,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.25,"stepover":1.8,"chip":0.125,"chipSource":"db"}}},{"code":"UC-2F-D8.0-L22-E3b","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":8.0,"flutes":2,"len":22.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.6,"stepover":2.4,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"}}},{"code":"UC-2F-D8.0-L52-F9","group":"Uppåtskärande fräsar, 2-skäriga","type":"upcut","vtype":1,"d":8.0,"flutes":2,"len":52.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.6,"stepover":2.4,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":2.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":3.0,"stepover":2.4,"chip":0.125,"chipSource":"db"}}},{"code":"SB-3F-D22-F7b","group":"Planfräsar","type":"surfacing","vtype":1,"d":22.0,"flutes":2,"len":17.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.495,"stepover":5.94,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.495,"stepover":5.94,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.495,"stepover":5.94,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.495,"stepover":5.94,"chip":0.125,"chipSource":"db"}}},{"code":"SB-3F-D30-F8b","group":"Planfräsar","type":"surfacing","vtype":1,"d":30.0,"flutes":2,"len":20.0,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.675,"stepover":8.1,"chip":0.125,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.675,"stepover":8.1,"chip":0.125,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.675,"stepover":8.1,"chip":0.125,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.675,"stepover":8.1,"chip":0.125,"chipSource":"db"}}},{"code":"SB-3F-D25.4-F11","group":"Planfräsar","type":"surfacing","vtype":1,"d":25.4,"flutes":3,"len":6.35,"angle":null,"tip":null,"radius":null,"dlc":false,"cuts":{"softwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.571,"stepover":6.858,"chip":0.083,"chipSource":"db"},"hardwood":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.571,"stepover":6.858,"chip":0.083,"chipSource":"db"},"mdf":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.571,"stepover":6.858,"chip":0.083,"chipSource":"db"},"melamine":{"feed":2500.0,"plunge":800.0,"rpm":10000,"stepdown":0.571,"stepover":6.858,"chip":0.083,"chipSource":"db"}}}]};
+
+</script>
+<script>
+/* Fräsmatning – räknar matning ur chipload, antal skär och varvtal.
+   Skärdata kommer från window.TOOL_DB (data/tools.js, genererad ur .vtdb). */
+(function () {
+  "use strict";
+
+  const DB = window.TOOL_DB;
+  const TOOLS = DB.tools.map((t) => Object.assign({}, t, { codeAngle: parseAngle(t.code) }));
+
+  // ---------- Material ----------
+  const MATERIALS = [
+    { id: "hardwood", label: "Hårt trä", sub: "Ek, bok, ask", full: "Hårt trä" },
+    { id: "softwood", label: "Mjukt trä", sub: "Furu, gran, plywood", full: "Mjukt trä / plywood" },
+    { id: "mdf", label: "MDF", sub: "MDF, spånskiva", full: "MDF / spånskiva" },
+    { id: "melamine", label: "Melamin", sub: "Belagd skiva", full: "Melamin" },
+    { id: "acrylic", label: "Akryl", sub: "PMMA, plexiglas", full: "Akryl" },
+    { id: "hardplastic", label: "Hård plast", sub: "POM, PC, nylon", full: "Hård plast" },
+    { id: "softplastic", label: "Mjuk plast", sub: "HDPE, LDPE, PP", full: "Mjuk plast" },
+    { id: "aluminium", label: "Aluminium", sub: "Legeringar", full: "Aluminium" },
+    { id: "fr4", label: "FR4 / PCB", sub: "Kretskort", full: "FR4 / PCB" },
+    { id: "acm", label: "ACM", sub: "Dibond, alucobond", full: "ACM / Dibond" },
+  ];
+
+  // ---------- Frästyper ----------
+  // rows = vilka mått man väljer innan antal skär
+  const TYPES = [
+    { id: "upcut", label: "Upcut", sub: "Uppåtskärande", rows: ["d"], blurb: "Lyfter upp spånen ur spåret. Bra för djupa spår och fickor, men kan ge fransig överkant." },
+    { id: "downcut", label: "Downcut", sub: "Nedåtskärande", rows: ["d"], blurb: "Trycker ner fibrerna och ger ren överkant. Spånen packas i spåret, så kör grundare pass." },
+    { id: "vbit", label: "V-bit", sub: "Gravyr, V-carve", rows: ["d", "angle", "tip"], blurb: "Spetsig fräs för gravyr, V-carve och fasning. Välj vinkel och spetsbredd." },
+    { id: "ball", label: "Kulfräs", sub: "Ball nose", rows: ["d"], blurb: "Halvrund spets för 3D-relief och mjuka konturer. Radien är halva diametern." },
+    { id: "tapered", label: "Konisk radie", sub: "Tapered ball", rows: ["radius"], blurb: "Konisk kropp med rundad spets. Fina 3D-detaljer med en stabil fräs." },
+    { id: "compression", label: "Kompression", sub: "Upp + ned", rows: ["d"], blurb: "Uppåtskärande nertill och nedåtskärande upptill. Rena kanter på båda sidor av skivan." },
+    { id: "straight", label: "Notfräs", sub: "Raka skär", rows: ["d"], blurb: "Raka skär för spår, fickor och kanter i trä och plast." },
+    { id: "roundover", label: "Avrundning", sub: "Kantradie", rows: ["radius"], blurb: "Rundar av kanter. Välj radie." },
+    { id: "surfacing", label: "Planfräs", sub: "Spoilboard", rows: ["d"], blurb: "Bred fräs för att plana spoilboard och stora ytor." },
+    { id: "flush", label: "Kopierfräs", sub: "Med lager", rows: ["d"], blurb: "Kopierfräs med lager som följer en mall." },
+    { id: "pcb", label: "PCB-fräs", sub: "Majskolv", rows: ["d"], blurb: "Fräs för FR4 och kretskort." },
+    { id: "acm", label: "V-spår ACM", sub: "Vikspår", rows: ["d"], blurb: "V-spår för att vika ACM- och Dibondskivor." },
+  ];
+  const TYPE = Object.fromEntries(TYPES.map((t) => [t.id, t]));
+
+  const ROWS = {
+    d: { label: "Diameter", unit: "mm", get: (t) => t.d, fmt: (v) => num(v) },
+    angle: { label: "Vinkel", unit: "grader", get: (t) => t.angle, fmt: (v) => num(v) + "°" },
+    tip: { label: "Spetsbredd", unit: "mm", get: (t) => t.tip, fmt: (v) => num(v) },
+    radius: { label: "Radie", unit: "mm", get: (t) => t.radius, fmt: (v) => num(v) },
+  };
+
+  const RPM_MIN = 3000, RPM_MAX = 30000, RPM_STEP = 500;
+  const DEFAULT_MAXFEED = Math.max(...TOOLS.flatMap((t) => Object.values(t.cuts).map((c) => c.feed)));
+
+  // ---------- State ----------
+  const STORE_KEY = "frasmatning.v1";
+  const state = Object.assign(
+    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, maxFeed: DEFAULT_MAXFEED, ownOn: false, own: null },
+    load()
+  );
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ingen lagring */ }
+  }
+
+  // ---------- Hjälpare ----------
+  const nf = (d) => new Intl.NumberFormat("sv-SE", { minimumFractionDigits: d, maximumFractionDigits: d });
+  function num(v, dec) {
+    if (v == null || isNaN(v)) return "–";
+    if (dec == null) return new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 3 }).format(v);
+    return nf(dec).format(v);
+  }
+  function parseAngle(code) { const m = /(\d+(?:\.\d+)?)°/.exec(code); return m ? +m[1] : null; }
+  const uniq = (arr) => [...new Set(arr.filter((v) => v != null))].sort((a, b) => a - b);
+  function nearest(opts, v) {
+    if (!opts.length) return null;
+    if (v == null) return opts[0];
+    return opts.reduce((best, o) => (Math.abs(o - v) < Math.abs(best - v) ? o : best), opts[0]);
+  }
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const $ = (id) => document.getElementById(id);
+  function el(tag, attrs, html) {
+    const e = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === "on") for (const ev in attrs.on) e.addEventListener(ev, attrs.on[ev]);
+      else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k] === true ? "" : attrs[k]);
+    }
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+
+  // ---------- Urval ----------
+  function typesFor(material) { return new Set(TOOLS.filter((t) => t.cuts[material]).map((t) => t.type)); }
+
+  function resolve() {
+    const avail = typesFor(state.material);
+    if (!avail.has(state.type)) state.type = TYPES.find((t) => avail.has(t.id)).id;
+    const type = TYPE[state.type];
+
+    let cands = TOOLS.filter((t) => t.type === type.id && t.cuts[state.material]);
+    const rows = type.rows.map((key) => {
+      const get = ROWS[key].get;
+      const opts = uniq(cands.map(get));
+      let val = state.sel[key];
+      if (!opts.includes(val)) val = nearest(opts, val);
+      state.sel[key] = val;
+      cands = cands.filter((t) => get(t) === val);
+      return { key, opts, val };
+    });
+
+    const flOpts = uniq(cands.map((t) => t.flutes));
+    if (!flOpts.includes(state.flutes)) state.flutes = nearest(flOpts, state.flutes);
+    cands = cands.filter((t) => t.flutes === state.flutes);
+
+    let tool = cands.find((t) => t.code === state.article);
+    if (!tool) {
+      // Föredra icke-DLC och kortaste skärlängd som standard
+      tool = cands.slice().sort((a, b) => (a.dlc - b.dlc) || ((a.len || 0) - (b.len || 0)))[0];
+      state.article = tool.code;
+    }
+    const cut = tool.cuts[state.material];
+    if (state.rpmAuto || !state.rpm) state.rpm = cut.rpm;
+    return { avail, type, rows, flOpts, cands, tool, cut };
+  }
+
+  function compute(r) {
+    const { tool, cut } = r;
+    const z = tool.flutes;
+    const rpm = state.rpm;
+    const rec = cut.chip;
+    const ideal = rec * z * rpm;
+    const capped = ideal > state.maxFeed;
+    const calcFeed = Math.round(Math.min(ideal, state.maxFeed));
+    const feed = state.ownOn && state.own ? state.own : calcFeed;
+    const chip = feed / (z * rpm);
+    const ratio = chip / rec;
+    const plunge = Math.round(feed * (cut.plunge / cut.feed));
+    const rpmForMax = Math.floor(state.maxFeed / (rec * z) / 100) * 100;
+    return { feed, calcFeed, ideal, capped, chip, rec, ratio, plunge, rpmForMax };
+  }
+
+  // ---------- Rendering ----------
+  function render() {
+    const r = resolve();
+    const c = compute(r);
+    save();
+
+    renderMaterials();
+    renderTypes(r);
+    renderDims(r);
+    renderMachine(r, c);
+    renderResult(r, c);
+  }
+
+  function renderMaterials() {
+    const box = $("materials");
+    if (!box.childElementCount) {
+      MATERIALS.forEach((m) => {
+        const b = el("button", { type: "button", class: "tile", "data-id": m.id, on: { click: () => { state.material = m.id; state.article = null; render(); } } },
+          MATERIAL_SVG[m.id] + `<span class="t-name">${m.label}</span><span class="t-sub">${m.sub}</span>`);
+        box.appendChild(b);
+      });
+    }
+    [...box.children].forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.id === state.material)));
+  }
+
+  function renderTypes(r) {
+    const box = $("types");
+    if (!box.childElementCount) {
+      TYPES.forEach((t) => {
+        const b = el("button", { type: "button", class: "tile", "data-id": t.id, on: { click: () => { state.type = t.id; state.article = null; render(); } } },
+          TOOL_SVG[t.id] + `<span class="t-name">${t.label}</span><span class="t-sub">${t.sub}</span>`);
+        box.appendChild(b);
+      });
+    }
+    [...box.children].forEach((b) => {
+      const ok = r.avail.has(b.dataset.id);
+      b.disabled = !ok;
+      b.title = ok ? "" : "Finns inga skärdata för det här materialet";
+      b.setAttribute("aria-pressed", String(b.dataset.id === state.type));
+    });
+    const mat = MATERIALS.find((m) => m.id === state.material);
+    const missing = TYPES.filter((t) => !r.avail.has(t.id)).length;
+    $("type-blurb").innerHTML = `<strong>${r.type.label}:</strong> ${r.type.blurb}` +
+      (missing ? ` <span>Gråade typer saknar skärdata för ${mat.full.toLowerCase()}.</span>` : "");
+  }
+
+  function seg(label, unit, items, onPick, extraClass) {
+    const f = el("div", { class: "field" });
+    f.appendChild(el("div", { class: "field-label" }, `${label}${unit ? ` <span style="font-weight:400">(${unit})</span>` : ""}`));
+    const s = el("div", { class: "seg" + (extraClass ? " " + extraClass : ""), role: "group", "aria-label": label });
+    items.forEach((it) => {
+      s.appendChild(el("button", {
+        type: "button", "aria-pressed": String(!!it.on), disabled: !!it.disabled, title: it.title || false,
+        on: { click: () => onPick(it.value) },
+      }, it.text));
+    });
+    f.appendChild(s);
+    return f;
+  }
+
+  function renderDims(r) {
+    const box = $("dims");
+    box.innerHTML = "";
+    r.rows.forEach((row) => {
+      const def = ROWS[row.key];
+      box.appendChild(seg(def.label, def.unit, row.opts.map((v) => ({ value: v, text: def.fmt(v), on: v === row.val })),
+        (v) => { state.sel[row.key] = v; state.article = null; render(); }));
+    });
+
+    // Antal skär: alltid 1–4, de som inte finns gråas ut
+    const flAll = [1, 2, 3, 4];
+    box.appendChild(seg("Antal skär", "", flAll.map((n) => ({
+      value: n, text: `${n} skär`, on: n === state.flutes, disabled: !r.flOpts.includes(n),
+      title: r.flOpts.includes(n) ? "" : "Finns inte för vald fräs",
+    })), (v) => { state.flutes = v; state.article = null; render(); }));
+
+    if (r.cands.length > 1) {
+      box.appendChild(seg("Artikel", "skärlängd", r.cands.map((t) => ({
+        value: t.code, text: (t.len ? `${num(t.len)} mm` : t.code) + (t.dlc ? " DLC" : "") + (t.group.includes("O-flute") ? " O-flute" : t.group.includes("Aluminium") ? " Alu" : ""),
+        on: t.code === r.tool.code, title: t.code,
+      })), (v) => { state.article = v; render(); }, "articles"));
+    }
+
+    const hints = { vbit: "Diameter, vinkel och spetsbredd", tapered: "Spetsradie och antal skär", roundover: "Radie och antal skär" };
+    $("dim-hint").textContent = hints[r.type.id] || "Diameter (mm) och antal skär";
+  }
+
+  function renderMachine(r, c) {
+    const rpmIn = $("rpm"), mfIn = $("maxfeed");
+    if (document.activeElement !== rpmIn) rpmIn.value = state.rpm;
+    if (document.activeElement !== mfIn) mfIn.value = state.maxFeed;
+    const recRpm = r.cut.rpm;
+    let html = `Databasens varvtal för den här fräsen: ${num(recRpm, 0)} rpm.`;
+    if (state.rpm !== recRpm) html += ` <button type="button" class="linkbtn" id="use-rpm">Använd ${num(recRpm, 0)}</button>`;
+    $("rpm-note").innerHTML = html;
+    const u = $("use-rpm");
+    if (u) u.addEventListener("click", () => { state.rpmAuto = true; state.rpm = recRpm; render(); });
+  }
+
+  function renderResult(r, c) {
+    const { tool, cut } = r;
+    const mat = MATERIALS.find((m) => m.id === state.material);
+    $("feed").textContent = num(c.feed, 0);
+    $("summary").textContent = [mat.full, toolShort(tool), `${tool.flutes} skär`, `${num(state.rpm, 0)} rpm`].join(" · ");
+
+    // Mätare: kvot 0,4 → vänster kant, 1,0 → mitten, 1,6 → höger kant
+    const pos = clamp(0.5 + (c.ratio - 1) / 1.2, 0, 1);
+    $("mark").style.left = (pos * 100).toFixed(1) + "%";
+    const zone = c.ratio < 0.8 ? 0 : c.ratio > 1.2 ? 2 : 1;
+    [...$("legend").children].forEach((s, i) => s.classList.toggle("on", i === zone));
+
+    // Uppmaning när matningen slår i maskinens tak
+    const call = $("callout");
+    let msg = "";
+    if (state.ownOn && state.own) {
+      if (zone === 0) msg = `<p><b>För låg chipload.</b> Fräsen gnider mer än den skär, vilket ger värme och slöa skär. Rätt matning vid ${num(state.rpm, 0)} rpm är ${num(Math.min(c.ideal, state.maxFeed), 0)} mm/min.</p>`;
+      if (zone === 2) msg = `<p><b>För hög chipload.</b> Risk för fräsbrott och dålig yta. Sänk matningen till cirka ${num(Math.min(c.ideal, state.maxFeed), 0)} mm/min eller höj varvtalet.</p>`;
+    } else if (c.capped) {
+      const better = clamp(c.rpmForMax, RPM_MIN, RPM_MAX);
+      msg = `<p><b>Maskinen hinner inte.</b> Rätt chipload kräver ${num(c.ideal, 0)} mm/min, men maxmatningen är ${num(state.maxFeed, 0)} mm/min.</p>` +
+        (better < state.rpm ? `<p>Sänk varvtalet till ${num(better, 0)} rpm för rätt chipload. <button type="button" class="linkbtn" id="use-better">Använd ${num(better, 0)}</button></p>` : "");
+    }
+    call.innerHTML = msg;
+    call.hidden = !msg;
+    const ub = $("use-better");
+    if (ub) ub.addEventListener("click", () => { state.rpmAuto = false; state.rpm = clamp(c.rpmForMax, RPM_MIN, RPM_MAX); render(); });
+
+    const stepPct = tool.d && ["upcut", "downcut", "compression", "straight", "ball", "surfacing", "flush", "pcb"].includes(tool.type)
+      ? ` <small>${num((cut.stepover / tool.d) * 100, 0)} %</small>` : "";
+    const rows = [
+      ["Chipload", `${num(c.chip, 3)} <small>mm/tand</small>`],
+      ["Rätt för materialet", `${num(c.rec, 3)} <small>mm/tand${cut.chipSource === "calc" ? " (beräknad)" : ""}</small>`],
+      ["Nedmatning", `${num(c.plunge, 0)} <small>mm/min</small>`],
+      ["Skärdjup per pass", `${num(cut.stepdown, 2)} <small>mm</small>`],
+      ["Stegöver", `${num(cut.stepover, 2)} <small>mm</small>${stepPct}`],
+      ["Varvtal", `${num(state.rpm, 0)} <small>rpm</small>`],
+    ];
+    $("kv").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+
+    const details = [tool.group];
+    if (tool.len) details.push(`skärlängd ${num(tool.len)} mm`);
+    if (tool.type === "ball") details.push(`radie ${num(tool.d / 2)} mm`);
+    if (tool.type === "tapered" && tool.codeAngle) details.push(`konvinkel ${tool.codeAngle}°`);
+    if (tool.type === "roundover") details.push(`Ø${num(tool.d)} mm`);
+    if (tool.dlc) details.push("DLC-belagd");
+    $("article").innerHTML = TOOL_SVG[tool.type] + `<code>${tool.code}</code><span>${details.join(" · ")}</span>`;
+
+    // Egen matning
+    $("own-on").checked = !!state.ownOn;
+    $("own-wrap").hidden = !state.ownOn;
+    const own = $("own");
+    if (document.activeElement !== own) own.value = state.own || c.calcFeed;
+
+    // Mobilfot
+    $("dock-feed").textContent = num(c.feed, 0);
+    $("dock-sub").textContent = `${num(c.chip, 3)} mm/tand · ${["för lite", "rätt", "för mycket"][zone]}`;
+    $("dock-dot").style.background = zone === 1 ? "var(--good)" : "var(--bad)";
+
+    lastCopy = [
+      `${mat.full}, ${tool.code} (${toolShort(tool)}, ${tool.flutes} skär)`,
+      `Matning: ${num(c.feed, 0)} mm/min`,
+      `Nedmatning: ${num(c.plunge, 0)} mm/min`,
+      `Varvtal: ${num(state.rpm, 0)} rpm`,
+      `Skärdjup per pass: ${num(cut.stepdown, 2)} mm`,
+      `Stegöver: ${num(cut.stepover, 2)} mm`,
+      `Chipload: ${num(c.chip, 3)} mm/tand (rätt: ${num(c.rec, 3)})`,
+    ].join("\n");
+  }
+
+  function toolShort(t) {
+    if (t.type === "vbit") return `${t.angle}° V, Ø${num(t.d)} mm`;
+    if (t.type === "tapered") return `R${num(t.radius)} konisk`;
+    if (t.type === "roundover") return `R${num(t.radius)} avrundning`;
+    if (t.type === "acm") return `${t.codeAngle || t.angle}° V-spår`;
+    return `${num(t.d)} mm`;
+  }
+
+  // ---------- Händelser ----------
+  let lastCopy = "";
+  const STEPS = { rpm: RPM_STEP, maxfeed: 100, own: 50 };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-step]");
+    if (!b) return;
+    const which = b.dataset.step, dir = +b.dataset.dir;
+    if (which === "rpm") { state.rpmAuto = false; state.rpm = clamp(Math.round((state.rpm + dir * RPM_STEP) / RPM_STEP) * RPM_STEP, RPM_MIN, RPM_MAX); }
+    if (which === "maxfeed") state.maxFeed = clamp(state.maxFeed + dir * STEPS.maxfeed, 300, 30000);
+    if (which === "own") { const base = state.own || +$("own").value; state.own = clamp(Math.round((base + dir * STEPS.own) / 50) * 50, 50, 30000); }
+    render();
+  });
+  function bindInput(id, apply) {
+    const i = $(id);
+    i.addEventListener("change", () => { const v = parseFloat(String(i.value).replace(",", ".")); if (!isNaN(v)) apply(v); render(); });
+    i.addEventListener("keydown", (e) => { if (e.key === "Enter") i.blur(); });
+  }
+  bindInput("rpm", (v) => { state.rpmAuto = false; state.rpm = clamp(Math.round(v), RPM_MIN, RPM_MAX); });
+  bindInput("maxfeed", (v) => { state.maxFeed = clamp(Math.round(v), 300, 30000); });
+  bindInput("own", (v) => { state.own = clamp(Math.round(v), 50, 30000); });
+  $("own-on").addEventListener("change", (e) => { state.ownOn = e.target.checked; if (state.ownOn && !state.own) state.own = +$("own").value; render(); });
+
+  $("copy").addEventListener("click", () => {
+    const toast = $("toast");
+    const done = () => { toast.textContent = "Kopierat"; setTimeout(() => (toast.textContent = ""), 1800); };
+    const fallback = () => {
+      const ta = el("textarea", { style: "position:fixed;opacity:0" }); ta.value = lastCopy; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { toast.textContent = "Kunde inte kopiera"; }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(lastCopy).then(done, fallback);
+    else fallback();
+  });
+
+  $("dock").addEventListener("click", () => $("result").scrollIntoView({ behavior: "smooth", block: "start" }));
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((ents) => ents.forEach((en) => $("dock").classList.toggle("away", en.isIntersecting)), { threshold: 0.15 }).observe($("result"));
+  }
+
+  // Källa
+  const ver = /Version\s+([\d.]+)/.exec(DB.notes);
+  const prof = /Profil:\s*([^\n]+)/.exec(DB.notes);
+  const advice = DB.notes.split("\n").filter((l) => l.startsWith("Startvärden")).join(" ");
+  $("source").innerHTML =
+    `<p>${advice || "Startvärden för provfräsning."}</p>` +
+    `<p>Skärdata från verktygsdatabasen <b>${DB.library}</b>${ver ? ` version ${ver[1]}` : ""}${prof ? `, profil ${prof[1].trim()}` : ""} (${DB.tools.length} fräsar). ` +
+    `Matning = chipload × antal skär × varvtal, begränsad av maskinens maxmatning. Nedmatning, skärdjup och stegöver följer databasen.</p>`;
+
+  // ---------- Illustrationer ----------
+  function cube(top, left, right, extra) {
+    return `<svg width="64" height="54" viewBox="0 0 64 54" aria-hidden="true">
+      <g stroke="currentColor" stroke-opacity=".35" stroke-width=".8" stroke-linejoin="round">
+        <path d="M32 4 60 18 32 32 4 18Z" fill="${top}"/>
+        <path d="M4 18 32 32 32 50 4 36Z" fill="${left}"/>
+        <path d="M32 32 60 18 60 36 32 50Z" fill="${right}"/>
+      </g>${extra || ""}</svg>`;
+  }
+  const grainL = (c) => `<g fill="none" stroke="${c}" stroke-width=".9" opacity=".7"><path d="M5 22c8 3 15 8 26 12"/><path d="M5 27c9 3 14 6 26 12"/><path d="M5 32c7 2 16 7 26 11"/></g>`;
+  const rings = (c) => `<g fill="none" stroke="${c}" stroke-width=".9" opacity=".7"><path d="M39 33c3-4 9-6 13-6"/><path d="M42 36c3-3 7-5 11-5"/><path d="M36 40c4-6 12-10 20-10"/></g>`;
+  const plies = (c) => `<g fill="none" stroke="${c}" stroke-width="1.1" opacity=".75"><path d="M4 22.5 32 36.5 60 22.5"/><path d="M4 27 32 41 60 27"/><path d="M4 31.5 32 45.5 60 31.5"/></g>`;
+  function dots(c, n, seed) {
+    let s = seed, out = "";
+    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    for (let i = 0; i < n; i++) {
+      const u = rnd(), v = rnd(), face = i % 3;
+      let x, y;
+      if (face === 0) { x = 32 + (u - v) * 26; y = 18 + (u + v - 1) * 13; }
+      else if (face === 1) { x = 6 + u * 24; y = 20 + u * 12 + v * 16; }
+      else { x = 34 + u * 24; y = 32 - u * 12 + v * 16; }
+      out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(0.5 + rnd() * 0.6).toFixed(2)}" fill="${c}"/>`;
+    }
+    return `<g opacity=".55">${out}</g>`;
+  }
+  const MATERIAL_SVG = {
+    hardwood: cube("#a2643a", "#7c4626", "#8d532e", grainL("#5a2f17") + rings("#5a2f17") + `<path d="M14 15c8-2 18 2 26 0" stroke="#6b3a1d" stroke-width=".8" fill="none" opacity=".6"/>`),
+    softwood: cube("#ecd6a4", "#d9b979", "#e3c58c", plies("#b48a45")),
+    mdf: cube("#b88c5c", "#99703f", "#a77c4b", dots("#5d3f1d", 60, 7)),
+    melamine: cube("#f4f1ea", "#c39a68", "#cfa776", `<path d="M4 20 32 34 60 20" stroke="#f4f1ea" stroke-width="2.4" fill="none"/>` + dots("#6d4a25", 34, 3)),
+    acrylic: cube("rgba(176,214,236,.75)", "rgba(132,186,216,.7)", "rgba(152,200,226,.7)", `<g stroke="#fff" stroke-width="1.2" opacity=".9" fill="none"><path d="M18 14 34 22"/><path d="M8 26 14 40"/><path d="M46 28 52 25"/></g>`),
+    hardplastic: cube("#3a3d40", "#24272a", "#2e3134", `<ellipse cx="32" cy="17" rx="5" ry="2.6" fill="#141618"/>`),
+    softplastic: cube("#f1efe8", "#d7d4ca", "#e3e0d7", ""),
+    aluminium: cube("#d9dde1", "#a9b0b7", "#bfc5cb", `<g fill="none" stroke="#fff" stroke-width=".6" opacity=".8"><path d="M10 18 34 30"/><path d="M16 15 40 27"/><path d="M24 11 48 23"/></g><circle cx="38" cy="14" r="1.6" fill="#7d858c"/>`),
+    fr4: cube("#3f7d3a", "#c9b56a", "#d4c178", `<g fill="none" stroke="#d9a441" stroke-width="1.4" stroke-linecap="round"><path d="M16 17 26 12 36 17"/><path d="M28 24 40 18 50 23"/></g><g fill="#d9a441"><circle cx="16" cy="17" r="1.6"/><circle cx="50" cy="23" r="1.6"/></g><g fill="none" stroke="#2f2f2f" stroke-width="2"><path d="M4 24 32 38 60 24" opacity=".7"/></g>`),
+    acm: cube("#e7eaed", "#30343a", "#3a3f46", `<g stroke="#e7eaed" stroke-width="2.2" fill="none"><path d="M4 19.5 32 33.5 60 19.5"/><path d="M4 35 32 49 60 35"/></g>`),
+  };
+
+  // Fräsar ritas lodrätt: skaft upptill, skärdel nertill
+  function bit(body, extra) {
+    return `<svg width="44" height="60" viewBox="0 0 44 72" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="15" y="3" width="14" height="28" rx="2" fill="var(--surface-2)"/>
+      ${body}${extra || ""}</svg>`;
+  }
+  const fl = "var(--surface-2)";
+  const arrow = (up) => up
+    ? `<path d="M38 56V38M34 42l4-4 4 4" stroke-width="1.4"/>`
+    : `<path d="M38 38v18M34 52l4 4 4-4" stroke-width="1.4"/>`;
+  const TOOL_SVG = {
+    upcut: bit(`<path d="M15 31h14v33H15z" fill="${fl}"/><path d="M15 62 29 50M15 52 29 40M15 42 29 33"/>`, arrow(true)),
+    downcut: bit(`<path d="M15 31h14v33H15z" fill="${fl}"/><path d="M15 50 29 62M15 40 29 52M15 32 27 41"/>`, arrow(false)),
+    compression: bit(`<path d="M15 31h14v33H15z" fill="${fl}"/><path d="M15 64 29 54M15 56 27 47"/><path d="M15 38 29 47M17 31 29 39"/>`),
+    straight: bit(`<path d="M15 31h14v33H15z" fill="${fl}"/><path d="M22 33v29"/>`),
+    vbit: bit(`<path d="M15 31h14v5L22 66 15 36z" fill="${fl}"/><path d="M22 36v28"/>`),
+    ball: bit(`<path d="M15 31h14v26a7 7 0 0 1-14 0z" fill="${fl}"/><path d="M15 54 29 44M15 44 29 35"/>`),
+    tapered: bit(`<path d="M15 31h14l-5 31a2 2 0 0 1-4 0z" fill="${fl}"/><path d="M16 42 27 36M18 52 26 46"/>`),
+    roundover: bit(`<path d="M15 31h14v4h6v6a10 10 0 0 0-10 10h-1v6h-9z" fill="${fl}"/><rect x="17" y="58" width="10" height="6" rx="2" fill="${fl}"/>`),
+    surfacing: bit(`<path d="M17 31h10v12H17z" fill="${fl}"/><path d="M4 43h36v10H4z" fill="${fl}"/><path d="M10 53v-4M22 53v-4M34 53v-4"/>`),
+    flush: bit(`<path d="M15 31h14v24H15z" fill="${fl}"/><path d="M15 50 29 42M15 41 29 34"/><rect x="14" y="56" width="16" height="8" rx="3" fill="${fl}"/>`),
+    pcb: bit(`<path d="M18 31h8v33h-8z" fill="${fl}"/><path d="M18 36l8 4M18 42l8 4M18 48l8 4M18 54l8 4M26 36l-8 4M26 42l-8 4M26 48l-8 4M26 54l-8 4" stroke-width="1"/>`),
+    acm: bit(`<path d="M15 31h14v6H15z" fill="${fl}"/><path d="M5 37h34L22 56z" fill="${fl}"/><path d="M22 40v14"/>`),
+  };
+
+  render();
+})();
+
+</script>
+</body>
+</html>
