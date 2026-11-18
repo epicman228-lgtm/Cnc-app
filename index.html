@@ -230,8 +230,6 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 .article code { font: 700 15px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
 .article span { font-size: 13.5px; color: var(--muted); }
 
-.field.wide { grid-column: 1 / -1; }
-@media (min-width: 460px) { .field.wide .stepper { max-width: calc(50% - 6px); } }
 .r-rec { margin: 8px 0 0; font-size: 14.5px; }
 .r-rec b { font-variant-numeric: tabular-nums; }
 
@@ -333,14 +331,6 @@ footer.src p { margin: 0; }
               <button type="button" data-step="feed" data-dir="-1" aria-label="Sänk matning">−</button>
               <input id="feedin" type="number" inputmode="numeric" min="50" max="30000" step="50">
               <button type="button" data-step="feed" data-dir="1" aria-label="Höj matning">+</button>
-            </div>
-          </div>
-          <div class="field wide">
-            <label class="field-label" for="maxfeed">Maskinens maxmatning (mm/min)</label>
-            <div class="stepper">
-              <button type="button" data-step="maxfeed" data-dir="-1" aria-label="Sänk maxmatning">−</button>
-              <input id="maxfeed" type="number" inputmode="numeric" min="300" max="30000" step="100">
-              <button type="button" data-step="maxfeed" data-dir="1" aria-label="Höj maxmatning">+</button>
             </div>
           </div>
         </div>

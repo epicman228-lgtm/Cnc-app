@@ -10,13 +10,12 @@ verktygsdatabasen `data/verkstaden5-vectric-hobby.vtdb` (Vectric-format, profil 
    avrundning, planfräs, kopierfräs, PCB-fräs och V-spår för ACM. Typer som saknar data för materialet gråas ut.
 3. **Fräsen** – diameter (för V-bit även vinkel och spetsbredd, för konisk radie och avrundning radien),
    antal skär och vid behov artikel/skärlängd.
-4. **Varvtal och matning** – varvtal, din matning och maskinens maxmatning (2 500 mm/min i hobbyprofilen).
+4. **Varvtal och matning** – varvtal och matning.
    Matningen följer varvtalet tills du skriver in en egen, sedan visar mätaren om chiploaden blir för låg eller för hög.
 5. **Skärdjup** – totalt djup ger antal pass, plus förslag per bearbetning (spår, ficka, adaptiv, finpass).
    Djup per pass kommer från databasen och sänks automatiskt när chiploaden är högre än rätt.
 
-Matning = chipload × antal skär × varvtal, begränsad av maxmatningen. Om taket nås visas
-vilket varvtal som ger rätt chipload. Nedmatning, skärdjup per pass och stegöver tas från databasen.
+Matning = chipload × antal skär × varvtal. Nedmatning, skärdjup per pass och stegöver tas från databasen.
 Förslagen för adaptiv fräsning och finpass är tumregler, inte databasvärden, och är märkta så i appen.
 
 ## Köra
