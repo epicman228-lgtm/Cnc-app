@@ -51,7 +51,7 @@
   // ---------- State ----------
   const STORE_KEY = "frasmatning.v1";
   const state = Object.assign(
-    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, feed: null, feedAuto: true, maxFeed: DEFAULT_MAXFEED, depth: 6 },
+    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, feed: null, feedAuto: true, maxFeed: DEFAULT_MAXFEED, depth: 6, collapsed: [] },
     load()
   );
 
@@ -206,6 +206,52 @@
     renderDims(r);
     renderMachine(r, c);
     renderResult(r, c);
+    renderSteps(r, c);
+  }
+
+  // ---------- Hopfällbara steg ----------
+  const CHEV = `<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const STEPS_EL = [...document.querySelectorAll(".panel .step")];
+  STEPS_EL.forEach((step, i) => {
+    const head = step.querySelector(".step-head");
+    const body = el("div", { class: "step-body" });
+    [...step.children].filter((n) => n !== head).forEach((n) => body.appendChild(n));
+    step.appendChild(body);
+    body.id = `step-body-${i}`;
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-controls", body.id);
+    head.insertAdjacentHTML("beforeend", `<span class="step-sum"></span>${CHEV}`);
+    const toggle = () => { state.collapsed[i] = !state.collapsed[i]; render(); };
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  });
+  $("toggle-all").addEventListener("click", () => {
+    const anyOpen = STEPS_EL.some((_, i) => !state.collapsed[i]);
+    state.collapsed = STEPS_EL.map(() => anyOpen);
+    render();
+  });
+
+  function renderSteps(r, c) {
+    const mat = MATERIALS.find((m) => m.id === state.material);
+    const p = lastPlan;
+    const sums = [
+      [mat.full],
+      [r.type.label],
+      [`${toolShort(r.tool)} · ${r.tool.flutes} skär`],
+      [`${num(state.rpm, 0)} rpm · ${num(c.feed, 0)} mm/min`, c.zone !== 1],
+      [`${num(p.total, 1)} mm · ${p.passes} pass` + (p.tooDeep || (p.vMax && p.total > p.vMax) ? " · för djupt" : ""), p.tooDeep || (p.vMax && p.total > p.vMax)],
+    ];
+    STEPS_EL.forEach((step, i) => {
+      const closed = !!state.collapsed[i];
+      step.classList.toggle("collapsed", closed);
+      step.querySelector(".step-head").setAttribute("aria-expanded", String(!closed));
+      const sum = step.querySelector(".step-sum");
+      sum.textContent = sums[i][0];
+      sum.classList.toggle("bad", !!sums[i][1]);
+    });
+    const anyOpen = STEPS_EL.some((_, i) => !state.collapsed[i]);
+    $("toggle-all").textContent = anyOpen ? "Fäll ihop alla" : "Fäll ut alla";
   }
 
   function renderMaterials() {
@@ -373,7 +419,7 @@
     // Mobilfot
     $("dock-feed").textContent = num(c.feed, 0);
     $("dock-sub").textContent = `${num(c.chip, 3)} mm/tand · ${["för lite", "rätt", "för mycket"][zone]}`;
-    $("dock-dot").style.background = zone === 1 ? "var(--good)" : "var(--bad)";
+    $("dock-mark").style.left = (pos * 100).toFixed(1) + "%";
 
     lastCopy = [
       `${mat.full}, ${tool.code} (${toolShort(tool)}, ${tool.flutes} skär)`,
@@ -396,8 +442,20 @@
       <div class="depth-head"><span class="depth-big">${p.passes} pass <small>à ${num(p.perPass, 2)} mm</small></span>
       <span class="note">för ${num(p.total, 1)} mm totalt, max ${num(p.ap, 2)} mm per pass</span></div>`;
     if (p.scale < 1) h += `<p class="note">Djupet per pass är sänkt från databasens ${num(p.base, 2)} mm eftersom chiploaden är ${num(c.ratio * 100, 0)} % av rätt.</p>`;
-    if (p.tooDeep) h += `<p class="warnline">${num(p.total, 1)} mm är djupare än fräsens skärlängd (${num(t.len)} mm). Välj en längre fräs, annars gnider skaftet.</p>`;
-    if (p.vMax && p.total > p.vMax) h += `<p class="warnline">V-biten når full bredd (Ø${num(t.d)} mm) redan vid ${num(p.vMax, 1)} mm djup. Djupare än så blir spåret raka väggar med skaftet som gnider.</p>`;
+    const longer = p.tooDeep ? TOOLS.filter((x) => x.type === t.type && x.d === t.d && x.flutes === t.flutes && x.cuts[state.material] && x.len >= p.total)
+      .sort((a, b) => a.len - b.len)[0] : null;
+    let warn = "";
+    if (p.tooDeep) warn = `${num(p.total, 1)} mm är djupare än fräsens skärlängd (${num(t.len)} mm). Skaftet kommer att gnida mot materialet. ` +
+      (longer ? `Det finns en längre variant med ${num(longer.len)} mm skärlängd.` : "Ingen fräs av samma typ och storlek har tillräcklig skärlängd, så välj en annan diameter eller fräs från båda sidor.");
+    if (p.vMax && p.total > p.vMax) warn = `V-biten når full bredd (Ø${num(t.d)} mm) redan vid ${num(p.vMax, 1)} mm djup. Djupare än så får spåret raka väggar och skaftet gnider.`;
+    const maxLine = t.len ? `Max djup med den här fräsen: <b>${num(t.len)} mm</b> (skärlängd).`
+      : p.vMax ? `V-biten når full bredd vid <b>${num(p.vMax, 1)} mm</b> djup.` : "Skärlängd saknas i databasen för den här fräsen.";
+    $("depth-max").innerHTML = maxLine;
+    const dw = $("depth-warn");
+    dw.hidden = !warn;
+    dw.innerHTML = warn + (longer ? ` <button type="button" class="linkbtn" data-article="${longer.code}">Byt till ${longer.code}</button>` : "");
+    if (warn) h += `<p class="warnline">${dw.innerHTML}</p>`;
+    h += `<p class="note">${maxLine}</p>`;
     if (p.ops.length) {
       h += `<div class="ops-wrap"><table class="ops"><thead><tr><th>Bearbetning</th><th>Djup/pass</th><th>Stegöver</th></tr></thead><tbody>` +
         p.ops.map((o) => `<tr><td><b>${o.name}</b><span class="src">${o.note} · ${o.src}</span></td><td><b>${num(o.ap, 2)}</b> mm</td><td>${o.ae}</td></tr>`).join("") +
@@ -422,6 +480,8 @@
   let lastCopy = "";
   const STEPS = { rpm: RPM_STEP, maxfeed: 100, feed: 50, depth: 0.5 };
   document.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-article]");
+    if (a) { state.article = a.dataset.article; render(); return; }
     const b = e.target.closest("[data-step]");
     if (!b) return;
     const which = b.dataset.step, dir = +b.dataset.dir;

@@ -82,6 +82,19 @@ h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; lette
 }
 .step { display: grid; gap: 12px; min-width: 0; }
 .step-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.step-head[role="button"] { flex-wrap: nowrap; }
+.step-head h2 { flex: none; }
+.step-hint { flex: 1 1 auto; min-width: 0; }
+.step-head[role="button"] { cursor: pointer; user-select: none; -webkit-user-select: none; border-radius: 10px; }
+.step.collapsed .step-head { flex-wrap: wrap; row-gap: 2px; }
+.step-sum { white-space: nowrap; margin-left: auto; font-size: 14px; font-weight: 600; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.step-sum.bad { color: var(--bad); }
+.chev { align-self: center; width: 20px; height: 20px; flex: none; color: var(--muted); transition: transform .2s; }
+.step:not(.collapsed) .step-sum { display: none; }
+.step:not(.collapsed) .chev { margin-left: auto; transform: rotate(180deg); }
+.step.collapsed .step-body, .step.collapsed .step-hint { display: none; }
+.step-body { display: grid; gap: 12px; min-width: 0; }
+.panel-tools { display: flex; justify-content: flex-end; margin-bottom: -12px; font-size: 14px; }
 .step-no {
   width: 26px; height: 26px; border-radius: 50%; flex: none;
   background: var(--ink); color: var(--on-ink);
@@ -254,14 +267,23 @@ footer.src p { margin: 0; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   background: var(--ink); color: var(--on-ink);
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: grid; gap: 8px;
   border: 0; width: 100%; text-align: left;
   transition: transform .25s ease;
 }
 .dock.away { transform: translateY(110%); }
 .dock b { font: 800 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .dock .d-sub { font-size: 13px; opacity: .8; }
-.dock .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--good); }
+.dock-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dock-gauge {
+  position: relative; display: block; height: 8px; border-radius: var(--pill);
+  background: linear-gradient(90deg, var(--bad) 0%, var(--warn) 20%, var(--good) 34%, var(--good) 66%, var(--warn) 80%, var(--bad) 100%);
+}
+.dock-mark {
+  position: absolute; top: 50%; left: 50%; width: 6px; height: 18px; border-radius: 3px;
+  background: var(--on-ink); border: 2px solid var(--ink); transform: translate(-50%, -50%);
+  transition: left .35s cubic-bezier(.3,.7,.3,1);
+}
 @media (min-width: 960px) { .dock { display: none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -277,6 +299,7 @@ footer.src p { margin: 0; }
 
   <div class="layout">
     <section class="panel" aria-label="Inställningar">
+      <div class="panel-tools"><button type="button" class="linkbtn" id="toggle-all">Fäll ihop alla</button></div>
       <div class="step">
         <div class="step-head"><span class="step-no">1</span><h2>Material</h2></div>
         <div class="tiles mat" id="materials" role="group" aria-label="Material"></div>
@@ -341,6 +364,8 @@ footer.src p { margin: 0; }
             <div class="seg" id="depth-presets" role="group" aria-label="Snabbval för djup"></div>
           </div>
         </div>
+        <p class="note" id="depth-max"></p>
+        <p class="warnline" id="depth-warn" hidden></p>
       </div>
     </section>
 
@@ -378,8 +403,8 @@ footer.src p { margin: 0; }
 </div>
 
 <button type="button" class="dock" id="dock" aria-label="Visa resultat">
-  <span><span class="dot" id="dock-dot"></span><b id="dock-feed">–</b> <span class="d-sub">mm/min</span></span>
-  <span class="d-sub" id="dock-sub"></span>
+  <span class="dock-row"><span><b id="dock-feed">–</b> <span class="d-sub">mm/min</span></span><span class="d-sub" id="dock-sub"></span></span>
+  <span class="dock-gauge" aria-hidden="true"><span class="dock-mark" id="dock-mark"></span></span>
 </button>
 
 <script>
@@ -441,7 +466,7 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
   // ---------- State ----------
   const STORE_KEY = "frasmatning.v1";
   const state = Object.assign(
-    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, feed: null, feedAuto: true, maxFeed: DEFAULT_MAXFEED, depth: 6 },
+    { material: "hardwood", type: "upcut", sel: { d: 4 }, flutes: 2, article: null, rpm: null, rpmAuto: true, feed: null, feedAuto: true, maxFeed: DEFAULT_MAXFEED, depth: 6, collapsed: [] },
     load()
   );
 
@@ -596,6 +621,52 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     renderDims(r);
     renderMachine(r, c);
     renderResult(r, c);
+    renderSteps(r, c);
+  }
+
+  // ---------- Hopfällbara steg ----------
+  const CHEV = `<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const STEPS_EL = [...document.querySelectorAll(".panel .step")];
+  STEPS_EL.forEach((step, i) => {
+    const head = step.querySelector(".step-head");
+    const body = el("div", { class: "step-body" });
+    [...step.children].filter((n) => n !== head).forEach((n) => body.appendChild(n));
+    step.appendChild(body);
+    body.id = `step-body-${i}`;
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-controls", body.id);
+    head.insertAdjacentHTML("beforeend", `<span class="step-sum"></span>${CHEV}`);
+    const toggle = () => { state.collapsed[i] = !state.collapsed[i]; render(); };
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  });
+  $("toggle-all").addEventListener("click", () => {
+    const anyOpen = STEPS_EL.some((_, i) => !state.collapsed[i]);
+    state.collapsed = STEPS_EL.map(() => anyOpen);
+    render();
+  });
+
+  function renderSteps(r, c) {
+    const mat = MATERIALS.find((m) => m.id === state.material);
+    const p = lastPlan;
+    const sums = [
+      [mat.full],
+      [r.type.label],
+      [`${toolShort(r.tool)} · ${r.tool.flutes} skär`],
+      [`${num(state.rpm, 0)} rpm · ${num(c.feed, 0)} mm/min`, c.zone !== 1],
+      [`${num(p.total, 1)} mm · ${p.passes} pass` + (p.tooDeep || (p.vMax && p.total > p.vMax) ? " · för djupt" : ""), p.tooDeep || (p.vMax && p.total > p.vMax)],
+    ];
+    STEPS_EL.forEach((step, i) => {
+      const closed = !!state.collapsed[i];
+      step.classList.toggle("collapsed", closed);
+      step.querySelector(".step-head").setAttribute("aria-expanded", String(!closed));
+      const sum = step.querySelector(".step-sum");
+      sum.textContent = sums[i][0];
+      sum.classList.toggle("bad", !!sums[i][1]);
+    });
+    const anyOpen = STEPS_EL.some((_, i) => !state.collapsed[i]);
+    $("toggle-all").textContent = anyOpen ? "Fäll ihop alla" : "Fäll ut alla";
   }
 
   function renderMaterials() {
@@ -763,7 +834,7 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     // Mobilfot
     $("dock-feed").textContent = num(c.feed, 0);
     $("dock-sub").textContent = `${num(c.chip, 3)} mm/tand · ${["för lite", "rätt", "för mycket"][zone]}`;
-    $("dock-dot").style.background = zone === 1 ? "var(--good)" : "var(--bad)";
+    $("dock-mark").style.left = (pos * 100).toFixed(1) + "%";
 
     lastCopy = [
       `${mat.full}, ${tool.code} (${toolShort(tool)}, ${tool.flutes} skär)`,
@@ -786,8 +857,20 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
       <div class="depth-head"><span class="depth-big">${p.passes} pass <small>à ${num(p.perPass, 2)} mm</small></span>
       <span class="note">för ${num(p.total, 1)} mm totalt, max ${num(p.ap, 2)} mm per pass</span></div>`;
     if (p.scale < 1) h += `<p class="note">Djupet per pass är sänkt från databasens ${num(p.base, 2)} mm eftersom chiploaden är ${num(c.ratio * 100, 0)} % av rätt.</p>`;
-    if (p.tooDeep) h += `<p class="warnline">${num(p.total, 1)} mm är djupare än fräsens skärlängd (${num(t.len)} mm). Välj en längre fräs, annars gnider skaftet.</p>`;
-    if (p.vMax && p.total > p.vMax) h += `<p class="warnline">V-biten når full bredd (Ø${num(t.d)} mm) redan vid ${num(p.vMax, 1)} mm djup. Djupare än så blir spåret raka väggar med skaftet som gnider.</p>`;
+    const longer = p.tooDeep ? TOOLS.filter((x) => x.type === t.type && x.d === t.d && x.flutes === t.flutes && x.cuts[state.material] && x.len >= p.total)
+      .sort((a, b) => a.len - b.len)[0] : null;
+    let warn = "";
+    if (p.tooDeep) warn = `${num(p.total, 1)} mm är djupare än fräsens skärlängd (${num(t.len)} mm). Skaftet kommer att gnida mot materialet. ` +
+      (longer ? `Det finns en längre variant med ${num(longer.len)} mm skärlängd.` : "Ingen fräs av samma typ och storlek har tillräcklig skärlängd, så välj en annan diameter eller fräs från båda sidor.");
+    if (p.vMax && p.total > p.vMax) warn = `V-biten når full bredd (Ø${num(t.d)} mm) redan vid ${num(p.vMax, 1)} mm djup. Djupare än så får spåret raka väggar och skaftet gnider.`;
+    const maxLine = t.len ? `Max djup med den här fräsen: <b>${num(t.len)} mm</b> (skärlängd).`
+      : p.vMax ? `V-biten når full bredd vid <b>${num(p.vMax, 1)} mm</b> djup.` : "Skärlängd saknas i databasen för den här fräsen.";
+    $("depth-max").innerHTML = maxLine;
+    const dw = $("depth-warn");
+    dw.hidden = !warn;
+    dw.innerHTML = warn + (longer ? ` <button type="button" class="linkbtn" data-article="${longer.code}">Byt till ${longer.code}</button>` : "");
+    if (warn) h += `<p class="warnline">${dw.innerHTML}</p>`;
+    h += `<p class="note">${maxLine}</p>`;
     if (p.ops.length) {
       h += `<div class="ops-wrap"><table class="ops"><thead><tr><th>Bearbetning</th><th>Djup/pass</th><th>Stegöver</th></tr></thead><tbody>` +
         p.ops.map((o) => `<tr><td><b>${o.name}</b><span class="src">${o.note} · ${o.src}</span></td><td><b>${num(o.ap, 2)}</b> mm</td><td>${o.ae}</td></tr>`).join("") +
@@ -812,6 +895,8 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
   let lastCopy = "";
   const STEPS = { rpm: RPM_STEP, maxfeed: 100, feed: 50, depth: 0.5 };
   document.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-article]");
+    if (a) { state.article = a.dataset.article; render(); return; }
     const b = e.target.closest("[data-step]");
     if (!b) return;
     const which = b.dataset.step, dir = +b.dataset.dir;

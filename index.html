@@ -82,6 +82,19 @@ h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; lette
 }
 .step { display: grid; gap: 12px; min-width: 0; }
 .step-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.step-head[role="button"] { flex-wrap: nowrap; }
+.step-head h2 { flex: none; }
+.step-hint { flex: 1 1 auto; min-width: 0; }
+.step-head[role="button"] { cursor: pointer; user-select: none; -webkit-user-select: none; border-radius: 10px; }
+.step.collapsed .step-head { flex-wrap: wrap; row-gap: 2px; }
+.step-sum { white-space: nowrap; margin-left: auto; font-size: 14px; font-weight: 600; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.step-sum.bad { color: var(--bad); }
+.chev { align-self: center; width: 20px; height: 20px; flex: none; color: var(--muted); transition: transform .2s; }
+.step:not(.collapsed) .step-sum { display: none; }
+.step:not(.collapsed) .chev { margin-left: auto; transform: rotate(180deg); }
+.step.collapsed .step-body, .step.collapsed .step-hint { display: none; }
+.step-body { display: grid; gap: 12px; min-width: 0; }
+.panel-tools { display: flex; justify-content: flex-end; margin-bottom: -12px; font-size: 14px; }
 .step-no {
   width: 26px; height: 26px; border-radius: 50%; flex: none;
   background: var(--ink); color: var(--on-ink);
@@ -254,14 +267,23 @@ footer.src p { margin: 0; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   background: var(--ink); color: var(--on-ink);
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: grid; gap: 8px;
   border: 0; width: 100%; text-align: left;
   transition: transform .25s ease;
 }
 .dock.away { transform: translateY(110%); }
 .dock b { font: 800 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .dock .d-sub { font-size: 13px; opacity: .8; }
-.dock .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--good); }
+.dock-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dock-gauge {
+  position: relative; display: block; height: 8px; border-radius: var(--pill);
+  background: linear-gradient(90deg, var(--bad) 0%, var(--warn) 20%, var(--good) 34%, var(--good) 66%, var(--warn) 80%, var(--bad) 100%);
+}
+.dock-mark {
+  position: absolute; top: 50%; left: 50%; width: 6px; height: 18px; border-radius: 3px;
+  background: var(--on-ink); border: 2px solid var(--ink); transform: translate(-50%, -50%);
+  transition: left .35s cubic-bezier(.3,.7,.3,1);
+}
 @media (min-width: 960px) { .dock { display: none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -277,6 +299,7 @@ footer.src p { margin: 0; }
 
   <div class="layout">
     <section class="panel" aria-label="Inställningar">
+      <div class="panel-tools"><button type="button" class="linkbtn" id="toggle-all">Fäll ihop alla</button></div>
       <div class="step">
         <div class="step-head"><span class="step-no">1</span><h2>Material</h2></div>
         <div class="tiles mat" id="materials" role="group" aria-label="Material"></div>
@@ -341,6 +364,8 @@ footer.src p { margin: 0; }
             <div class="seg" id="depth-presets" role="group" aria-label="Snabbval för djup"></div>
           </div>
         </div>
+        <p class="note" id="depth-max"></p>
+        <p class="warnline" id="depth-warn" hidden></p>
       </div>
     </section>
 
@@ -378,8 +403,8 @@ footer.src p { margin: 0; }
 </div>
 
 <button type="button" class="dock" id="dock" aria-label="Visa resultat">
-  <span><span class="dot" id="dock-dot"></span><b id="dock-feed">–</b> <span class="d-sub">mm/min</span></span>
-  <span class="d-sub" id="dock-sub"></span>
+  <span class="dock-row"><span><b id="dock-feed">–</b> <span class="d-sub">mm/min</span></span><span class="d-sub" id="dock-sub"></span></span>
+  <span class="dock-gauge" aria-hidden="true"><span class="dock-mark" id="dock-mark"></span></span>
 </button>
 
 <script src="data/tools.js"></script>
