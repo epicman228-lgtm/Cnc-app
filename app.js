@@ -435,7 +435,14 @@
       `Chipload: ${num(c.chip, 3)} mm/tand (rätt: ${num(c.rec, 3)})`,
       `Djup ${num(lastPlan.total, 1)} mm: ${lastPlan.passes} pass à ${num(lastPlan.perPass, 2)} mm`,
     ].join("\n");
+
+    current = {
+      material: state.material, code: tool.code, rpm: state.rpm, feed: c.feed, feedAuto: state.feedAuto,
+      plunge: c.plunge, passDepth: lastPlan.ap, stepover: cut.stepover, d: tool.d,
+      chip: Math.round(c.chip * 1000) / 1000, rec: c.rec, depth: state.depth,
+    };
   }
+  let current = null;
 
   let lastPlan = null;
   function renderDepth(r, c) {
@@ -504,17 +511,178 @@
   bindInput("feedin", (v) => { state.feedAuto = false; state.feed = clamp(Math.round(v), 50, 30000); });
   bindInput("depth", (v) => { state.depth = clamp(Math.round(v * 10) / 10, 0.1, 100); });
 
-  $("copy").addEventListener("click", () => {
-    const toast = $("toast");
+  function copyText(text, toast) {
     const done = () => { toast.textContent = "Kopierat"; setTimeout(() => (toast.textContent = ""), 1800); };
     const fallback = () => {
-      const ta = el("textarea", { style: "position:fixed;opacity:0" }); ta.value = lastCopy; document.body.appendChild(ta); ta.select();
+      const ta = el("textarea", { style: "position:fixed;opacity:0" }); ta.value = text; document.body.appendChild(ta); ta.select();
       try { document.execCommand("copy"); done(); } catch (e) { toast.textContent = "Kunde inte kopiera"; }
       ta.remove();
     };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(lastCopy).then(done, fallback);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
     else fallback();
+  }
+  $("copy").addEventListener("click", () => copyText(lastCopy, $("toast")));
+
+  // ---------- Mina fräsar: sparade inställningar per fräs och material ----------
+  const SAVED_KEY = "frasmatning.saved.v1";
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch (e) { saved = []; }
+  function persistSaved() {
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); return true; } catch (e) { return false; }
+  }
+  const matName = (id) => (MATERIALS.find((m) => m.id === id) || { full: id }).full;
+  const findSaved = (code, material) => saved.find((x) => x.code === code && x.material === material);
+  let savedFilter = "all";
+
+  function updateSavedCount() { $("saved-count").textContent = saved.length; }
+
+  // Siffror som de skrivs in i Aspire: utan mellanslag för tusental
+  const plain = (v, d) => new Intl.NumberFormat("sv-SE", { useGrouping: false, minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
+  function aspireRows(x) {
+    const t = TOOLS.find((y) => y.code === x.code);
+    const pctOk = t && ["upcut", "downcut", "compression", "straight", "ball", "surfacing", "flush", "pcb"].includes(t.type);
+    const pct = pctOk && x.d ? ` (${plain((x.stepover / x.d) * 100, 0)} %)` : "";
+    return [
+      ["Pass Depth", "skärdjup", `${plain(x.passDepth, 2)} mm`],
+      ["Stepover", "stegöver", `${plain(x.stepover, 2)} mm${pct}`],
+      ["Spindle Speed", "varvtal", `${plain(x.rpm, 0)} r.p.m.`],
+      ["Feed Rate", "matning", `${plain(x.feed, 0)} mm/min`],
+      ["Plunge Rate", "nedmatning", `${plain(x.plunge, 0)} mm/min`],
+    ].concat(x.toolNo ? [["Tool Number", "verktygsnr", x.toolNo]] : []);
+  }
+  function aspireText(x) {
+    return [`${x.name} (${x.code}, ${matName(x.material)})`]
+      .concat(aspireRows(x).map(([en, sv, v]) => `${en} (${sv}): ${v}`))
+      .concat(x.note ? [`Anteckning: ${x.note}`] : [])
+      .join("\n");
+  }
+
+  // Spara-formuläret
+  const form = $("save-form");
+  $("save-open").addEventListener("click", () => {
+    if (!current) return;
+    const t = TOOLS.find((x) => x.code === current.code);
+    const old = findSaved(current.code, current.material);
+    $("save-name").value = old ? old.name : `${TYPE[t.type].label} ${toolShort(t)} · ${matName(current.material)}`;
+    $("save-toolno").value = old ? old.toolNo || "" : "";
+    $("save-note").value = old ? old.note || "" : "";
+    $("save-hint").textContent = old
+      ? `Du har redan sparat ${current.code} för ${matName(current.material).toLowerCase()}. Den sparade versionen ersätts med värdena som visas nu.`
+      : `Sparar matning ${num(current.feed, 0)} mm/min, varvtal ${num(current.rpm, 0)} rpm, nedmatning, skärdjup och stegöver.`;
+    form.hidden = false;
+    $("save-name").focus();
   });
+  $("save-cancel").addEventListener("click", () => { form.hidden = true; });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!current) return;
+    const old = findSaved(current.code, current.material);
+    const entry = Object.assign({}, current, {
+      id: old ? old.id : String(Date.now()),
+      name: $("save-name").value.trim() || current.code,
+      toolNo: $("save-toolno").value.trim(),
+      note: $("save-note").value.trim(),
+      savedAt: Date.now(),
+    });
+    if (old) saved[saved.indexOf(old)] = entry; else saved.unshift(entry);
+    const ok = persistSaved();
+    form.hidden = true;
+    updateSavedCount();
+    const toast = $("toast");
+    toast.textContent = !ok ? "Sparad tills appen stängs (enheten tillåter inte lagring)" : old ? "Uppdaterad i Mina fräsar" : "Sparad i Mina fräsar";
+    setTimeout(() => (toast.textContent = ""), 2600);
+  });
+
+  // Listan
+  const sheet = $("sheet");
+  let lastFocus = null;
+  function openSheet() {
+    lastFocus = document.activeElement;
+    renderSaved();
+    sheet.hidden = false;
+    document.body.style.overflow = "hidden";
+    $("sheet-close").focus();
+  }
+  function closeSheet() {
+    sheet.hidden = true;
+    document.body.style.overflow = "";
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  $("open-saved").addEventListener("click", openSheet);
+  $("sheet-close").addEventListener("click", closeSheet);
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !sheet.hidden) closeSheet(); });
+
+  function renderSaved() {
+    const mats = MATERIALS.filter((m) => saved.some((x) => x.material === m.id));
+    if (savedFilter !== "all" && !mats.some((m) => m.id === savedFilter)) savedFilter = "all";
+    $("saved-filter").innerHTML = mats.length > 1
+      ? [`<button type="button" data-filter="all" aria-pressed="${savedFilter === "all"}">Alla (${saved.length})</button>`]
+          .concat(mats.map((m) => `<button type="button" data-filter="${m.id}" aria-pressed="${savedFilter === m.id}">${m.label} (${saved.filter((x) => x.material === m.id).length})</button>`)).join("")
+      : "";
+    const list = saved.filter((x) => savedFilter === "all" || x.material === savedFilter);
+    if (!saved.length) {
+      $("saved-list").innerHTML = `<div class="empty"><b>Inga sparade fräsar än.</b><span>Ställ in material och fräs, tryck sedan <b>Spara fräsen</b> under resultatet. Här ser du sedan matning, varvtal och de andra värdena att skriva in i Aspire.</span></div>`;
+      return;
+    }
+    $("saved-list").innerHTML = list.map((x) => {
+      const t = TOOLS.find((y) => y.code === x.code);
+      const date = new Date(x.savedAt).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+      return `<article class="saved" data-id="${x.id}">
+        <div class="saved-top">${t ? TOOL_SVG[t.type] : ""}<h3>${escapeHtml(x.name)}</h3><code>${escapeHtml(x.code)}</code>
+          <span class="meta">${escapeHtml(matName(x.material))}${x.toolNo ? ` · verktyg ${escapeHtml(x.toolNo)}` : ""} · sparad ${date}</span></div>
+        <div class="saved-feed"><b>${num(x.feed, 0)}</b><span>mm/min matning</span></div>
+        <dl class="aspire">${aspireRows(x).map(([en, sv, v]) => `<div><dt><i>${en}</i> · ${sv}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>
+        ${x.note ? `<p class="saved-note">${escapeHtml(x.note)}</p>` : ""}
+        <div class="actions">
+          <button type="button" class="btn" data-act="load"${t ? "" : " disabled"}>Öppna i kalkylatorn</button>
+          <button type="button" class="btn ghost" data-act="copy">Kopiera</button>
+          <button type="button" class="btn danger" data-act="del">Ta bort</button>
+          <span class="toast" role="status"></span>
+        </div>
+      </article>`;
+    }).join("");
+  }
+
+  $("saved-filter").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-filter]");
+    if (b) { savedFilter = b.dataset.filter; renderSaved(); }
+  });
+  $("saved-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    const card = b.closest(".saved");
+    const x = saved.find((y) => y.id === card.dataset.id);
+    if (!x) return;
+    if (b.dataset.act === "copy") copyText(aspireText(x), card.querySelector(".toast"));
+    if (b.dataset.act === "del") {
+      if (!b.classList.contains("armed")) {
+        b.classList.add("armed");
+        b.textContent = "Tryck igen för att ta bort";
+        setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "Ta bort"; } }, 3500);
+        return;
+      }
+      saved = saved.filter((y) => y !== x);
+      persistSaved();
+      updateSavedCount();
+      renderSaved();
+    }
+    if (b.dataset.act === "load") {
+      const t = TOOLS.find((y) => y.code === x.code);
+      if (!t) return;
+      state.material = t.cuts[x.material] ? x.material : state.material;
+      applyTool(t);
+      state.rpmAuto = false;
+      state.rpm = x.rpm;
+      state.feedAuto = !!x.feedAuto;
+      state.feed = x.feed;
+      if (x.depth) state.depth = x.depth;
+      render();
+      closeSheet();
+      $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+  updateSavedCount();
 
   $("dock").addEventListener("click", () => $("result").scrollIntoView({ behavior: "smooth", block: "start" }));
   if ("IntersectionObserver" in window) {

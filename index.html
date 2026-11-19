@@ -73,6 +73,9 @@ header.top { display: grid; gap: 6px; max-width: 680px; }
 .eyebrow { font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 h1 { font: 800 clamp(28px, 6vw, 40px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
 .title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.title-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.mine { min-height: 38px; padding: 0 14px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.count { min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--pill); background: var(--ink); color: var(--on-ink); font-size: 12.5px; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
 .btn.install { min-height: 38px; padding: 0 14px; font-size: 14px; }
 .lede { margin: 0; color: var(--muted); max-width: 60ch; }
 
@@ -299,6 +302,51 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
   background: var(--ink); color: var(--on-ink); font-weight: 600;
 }
 .btn.ghost { background: transparent; color: var(--ink); }
+.save-form { display: grid; gap: 10px; padding: 14px; border-radius: 12px; background: var(--surface-2); }
+.save-row { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+@media (max-width: 459px) { .save-row { grid-template-columns: minmax(0, 1fr); } }
+.text-in {
+  width: 100%; min-width: 0; min-height: 44px; padding: 0 14px; border-radius: 10px;
+  border: 1.5px solid var(--line); background: var(--surface); font-size: 16px;
+}
+
+/* Mina fräsar */
+.sheet {
+  position: fixed; inset: 0; z-index: 40; display: flex; justify-content: flex-end;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.sheet-inner {
+  width: min(560px, 100%); height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg); display: grid; align-content: start; gap: 12px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-head h2 { font-size: 24px; }
+.saved-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.saved-filter:empty { display: none; }
+.saved-filter button { min-height: 34px; padding: 0 12px; border-radius: var(--pill); border: 1.5px solid var(--line); background: var(--surface); font-size: 13.5px; }
+.saved-filter button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.saved-list { display: grid; gap: 12px; }
+.saved { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.saved-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+.saved-top svg { grid-row: span 3; width: 30px; height: 42px; color: var(--ink); }
+.saved-top h3 { margin: 0; font: 700 17px/1.2 var(--font-display); overflow-wrap: anywhere; }
+.saved-top code { font: 600 13px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.saved-top .meta { font-size: 13px; color: var(--muted); }
+.saved-feed { display: flex; align-items: baseline; gap: 8px; }
+.saved-feed b { font: 800 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.saved-feed span { color: var(--muted); }
+.aspire { margin: 0; display: grid; border-top: 1px solid var(--line); }
+.aspire > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.aspire dt { font-size: 14px; color: var(--muted); }
+.aspire dt i { font-style: normal; color: var(--ink); font-weight: 600; }
+.aspire dd { margin: 0; font: 600 15px/1.3 var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
+.saved-note { margin: 0; font-size: 14px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.saved .actions .btn { min-height: 40px; padding: 0 14px; font-size: 14px; }
+.btn.danger { border-color: var(--bad); color: var(--bad); background: transparent; }
+.btn.danger.armed { background: var(--bad); color: var(--surface); }
+.empty { padding: 20px; border: 1.5px dashed var(--line); border-radius: 16px; color: var(--muted); display: grid; gap: 6px; }
+.empty b { color: var(--ink); }
 .toast { font-size: 14px; color: var(--good); font-weight: 600; }
 
 footer.src { max-width: 680px; color: var(--muted); font-size: 13px; display: grid; gap: 6px; }
@@ -335,7 +383,7 @@ footer.src p { margin: 0; }
 <div class="wrap">
   <header class="top">
     <span class="eyebrow">Matning och varvtal för CNC-fräsar</span>
-    <div class="title-row"><h1>Fräsmatning</h1><button type="button" class="btn ghost install" id="install" hidden>Installera appen</button></div>
+    <div class="title-row"><h1>Fräsmatning</h1><div class="title-btns"><button type="button" class="btn ghost install" id="install" hidden>Installera appen</button><button type="button" class="btn ghost mine" id="open-saved" aria-haspopup="dialog">Mina fräsar <span class="count" id="saved-count">0</span></button></div></div>
     <p class="lede">Välj material och frässtål. Matningen räknas fram ur rätt chipload för just den fräsen och ditt varvtal.</p>
   </header>
 
@@ -438,14 +486,49 @@ footer.src p { margin: 0; }
         <div class="article" id="article"></div>
 
         <div class="actions">
-          <button type="button" class="btn" id="copy">Kopiera värden</button>
+          <button type="button" class="btn" id="save-open">Spara fräsen</button>
+          <button type="button" class="btn ghost" id="copy">Kopiera värden</button>
           <span class="toast" id="toast" role="status"></span>
         </div>
+
+        <form class="save-form" id="save-form" hidden>
+          <div class="field">
+            <label class="field-label" for="save-name">Namn</label>
+            <input class="text-in" id="save-name" type="text" autocomplete="off" maxlength="80">
+          </div>
+          <div class="save-row">
+            <div class="field">
+              <label class="field-label" for="save-toolno">Verktygsnr i Aspire</label>
+              <input class="text-in" id="save-toolno" type="text" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="valfritt">
+            </div>
+            <div class="field">
+              <label class="field-label" for="save-note">Anteckning</label>
+              <input class="text-in" id="save-note" type="text" autocomplete="off" maxlength="200" placeholder="t.ex. fin yta i ek">
+            </div>
+          </div>
+          <p class="note" id="save-hint"></p>
+          <div class="actions">
+            <button type="submit" class="btn" id="save-ok">Spara</button>
+            <button type="button" class="btn ghost" id="save-cancel">Avbryt</button>
+          </div>
+        </form>
       </section>
     </div>
   </div>
 
   <footer class="src" id="source"></footer>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-head">
+      <h2 id="sheet-title">Mina fräsar</h2>
+      <button type="button" class="btn ghost" id="sheet-close">Stäng</button>
+    </div>
+    <p class="note">Sparade inställningar per fräs och material, med fälten i samma ordning som i Aspires verktygsdialog. De sparas på den här enheten.</p>
+    <div class="saved-filter" id="saved-filter" role="group" aria-label="Filtrera på material"></div>
+    <div class="saved-list" id="saved-list"></div>
+  </div>
 </div>
 
 <button type="button" class="dock" id="dock" aria-label="Visa resultat">

@@ -23,6 +23,11 @@ I den publicerade Claude-versionen läser Claude bilden. Som fristående sida an
 Matning = chipload × antal skär × varvtal. Nedmatning, skärdjup per pass och stegöver tas från databasen.
 Förslagen för adaptiv fräsning och finpass är tumregler, inte databasvärden, och är märkta så i appen.
 
+**Mina fräsar:** tryck *Spara fräsen* under resultatet för att spara matning, varvtal, nedmatning,
+skärdjup och stegöver för just den fräsen och materialet (med valfritt verktygsnummer och anteckning).
+Menyn *Mina fräsar* visar värdena med Aspires fältnamn (Pass Depth, Stepover, Spindle Speed, Feed Rate,
+Plunge Rate) i samma ordning som i verktygsdialogen. Listan sparas på enheten.
+
 ## Android-app (.apk)
 
 `dist/frasmatning.apk` är appen som en vanlig Android-app (Android 6 eller nyare). Den fungerar offline
