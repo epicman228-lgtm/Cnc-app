@@ -23,6 +23,10 @@ I den publicerade Claude-versionen läser Claude bilden. Som fristående sida an
 Matning = chipload × antal skär × varvtal. Nedmatning, skärdjup per pass och stegöver tas från databasen.
 Förslagen för adaptiv fräsning och finpass är tumregler, inte databasvärden, och är märkta så i appen.
 
+**Inmatning i Aspire 8.5:** resultatet visas som Aspires verktygsdialog (Tool Info, Geometry, Cutting
+Parameters, Feeds and Speeds, Tool Number) med samma fältnamn, ordning och talformat (`1.0`, `2400.0`).
+Tryck på ett värde för att kopiera det.
+
 **Mina fräsar:** tryck *Spara fräsen* under resultatet för att spara matning, varvtal, nedmatning,
 skärdjup och stegöver för just den fräsen och materialet (med valfritt verktygsnummer och anteckning).
 Menyn *Mina fräsar* visar värdena med Aspires fältnamn (Pass Depth, Stepover, Spindle Speed, Feed Rate,

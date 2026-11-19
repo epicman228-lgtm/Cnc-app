@@ -247,11 +247,6 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 .gauge-legend .on { color: var(--good) !important; font-weight: 700; }
 .gauge-legend span:nth-child(1).on, .gauge-legend span:nth-child(3).on { color: var(--bad) !important; }
 
-.kv { display: grid; margin: 0; border-top: 1px solid var(--line); }
-.kv > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; font: 600 16px/1.3 var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
-.kv dd small { font: 400 13px var(--font-body); color: var(--muted); }
 
 .callout {
   display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px;
@@ -260,13 +255,6 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 }
 .callout p { margin: 0; }
 
-.article {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center;
-  padding: 12px 14px; border-radius: 12px; background: var(--surface-2);
-}
-.article svg { grid-row: span 3; color: var(--ink); }
-.article code { font: 700 15px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
-.article span { font-size: 13.5px; color: var(--muted); }
 
 .r-rec { margin: 8px 0 0; font-size: 14.5px; }
 .r-rec b { font-variant-numeric: tabular-nums; }
@@ -293,6 +281,33 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
   background: var(--ink); color: var(--on-ink); font-weight: 600;
 }
 .btn.ghost { background: transparent; color: var(--ink); }
+/* Aspire 8.5-formuläret */
+.chip-line { margin: 0; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip-line b { color: var(--ink); font-weight: 600; }
+.asp { --lab: 7.4em; --indent: 8px; display: grid; gap: 14px; padding: 14px 12px; border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.asp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.asp-head h3 { margin: 0; font: 700 16px/1.2 var(--font-display); }
+.asp-toast { font-size: 12.5px; color: var(--muted); }
+.asp-info { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.asp-info svg { width: 22px; height: 30px; flex: none; color: var(--ink); }
+.asp-group { display: grid; gap: 6px; min-width: 0; }
+.asp-group h4 { margin: 0; font: 700 14px/1.2 var(--font-body); }
+.asp-row { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr); align-items: center; gap: 8px; padding-left: var(--indent); }
+.asp-row.strong { padding-left: 0; grid-template-columns: calc(var(--lab) + var(--indent)) minmax(0, 1fr); }
+.asp-row.strong .asp-k { font-weight: 700; }
+.asp-k { font-size: 14px; }
+.asp-vals { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.asp-vals .asp-unit + .asp-val { margin-left: 4px; }
+.asp-val {
+  min-width: 64px; min-height: 34px; padding: 4px 8px; border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--ink) 35%, var(--line)); background: var(--surface);
+  font: 500 15px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-align: left; cursor: copy;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.asp-val.wide { flex: 1 1 12em; font-size: 14px; }
+.asp-val:hover { border-color: var(--ink); }
+.asp-val.empty { color: var(--muted); font-family: var(--font-body); font-size: 13px; cursor: default; display: inline-flex; align-items: center; height: 34px; border-style: dashed; }
+.asp-unit { font-size: 13.5px; color: var(--muted); }
 .save-form { display: grid; gap: 10px; padding: 14px; border-radius: 12px; background: var(--surface-2); }
 .save-row { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 @media (max-width: 459px) { .save-row { grid-template-columns: minmax(0, 1fr); } }
@@ -327,11 +342,6 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 .saved-feed { display: flex; align-items: baseline; gap: 8px; }
 .saved-feed b { font: 800 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .saved-feed span { color: var(--muted); }
-.aspire { margin: 0; display: grid; border-top: 1px solid var(--line); }
-.aspire > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
-.aspire dt { font-size: 14px; color: var(--muted); }
-.aspire dt i { font-style: normal; color: var(--ink); font-weight: 600; }
-.aspire dd { margin: 0; font: 600 15px/1.3 var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
 .saved-note { margin: 0; font-size: 14px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
 .saved .actions .btn { min-height: 40px; padding: 0 14px; font-size: 14px; }
 .btn.danger { border-color: var(--bad); color: var(--bad); background: transparent; }
@@ -470,11 +480,11 @@ footer.src p { margin: 0; }
 
         <div class="callout" id="callout" hidden></div>
 
-        <dl class="kv" id="kv"></dl>
+        <p class="chip-line" id="chip-line"></p>
+
+        <div class="asp" id="aspire"></div>
 
         <div class="depth" id="depth-out"></div>
-
-        <div class="article" id="article"></div>
 
         <div class="actions">
           <button type="button" class="btn" id="save-open">Spara fräsen</button>
@@ -795,7 +805,7 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     const box = $("materials");
     if (!box.childElementCount) {
       MATERIALS.forEach((m) => {
-        const b = el("button", { type: "button", class: "tile", "data-id": m.id, on: { click: () => { state.material = m.id; state.article = null; state.feedAuto = true; render(); } } },
+        const b = el("button", { type: "button", class: "tile", "data-id": m.id, on: { click: () => { state.material = m.id; state.feedAuto = true; render(); } } },
           MATERIAL_SVG[m.id] + `<span class="t-name">${m.label}</span><span class="t-sub">${m.sub}</span>`);
         box.appendChild(b);
       });
@@ -932,50 +942,30 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
 
     renderDepth(r, c);
 
-    const stepPct = tool.d && ["upcut", "downcut", "compression", "straight", "ball", "surfacing", "flush", "pcb"].includes(tool.type)
-      ? ` <small>${num((cut.stepover / tool.d) * 100, 0)} %</small>` : "";
-    const rows = [
-      ["Chipload", `${num(c.chip, 3)} <small>mm/tand</small>`],
-      ["Rätt för materialet", `${num(c.rec, 3)} <small>mm/tand${cut.chipSource === "calc" ? " (beräknad)" : ""}</small>`],
-      ["Nedmatning", `${num(c.plunge, 0)} <small>mm/min</small>`],
-      ["Skärdjup per pass", `${num(lastPlan.ap, 2)} <small>mm</small>`],
-      ["Stegöver", `${num(cut.stepover, 2)} <small>mm</small>${stepPct}`],
-      ["Varvtal", `${num(state.rpm, 0)} <small>rpm</small>`],
-    ];
-    if (["ball", "tapered", "roundover"].includes(tool.type) && tool.radius != null) {
-      rows.unshift([tool.type === "roundover" ? "Radie" : "Spetsradie", `R${num(tool.radius)} <small>mm</small>`]);
-    }
-    $("kv").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
-
-    const details = [tool.group];
-    if (tool.len) details.push(`skärlängd ${num(tool.len)} mm`);
-    if (tool.type === "ball") details.push(`radie ${num(tool.radius != null ? tool.radius : tool.d / 2)} mm`);
-    if (tool.type === "tapered") details.push(`spetsradie ${num(tool.radius)} mm`, `Ø${num(tool.d)} mm skaft`, tool.codeAngle ? `konvinkel ${tool.codeAngle}°` : "");
-    if (tool.type === "roundover") details.push(`Ø${num(tool.d)} mm`);
-    if (tool.dlc) details.push("DLC-belagd");
-    $("article").innerHTML = TOOL_SVG[tool.type] + `<code>${tool.code}</code><span>${details.filter(Boolean).join(" · ")}</span>`;
+    current = {
+      material: state.material, code: tool.code, rpm: state.rpm, feed: c.feed, feedAuto: state.feedAuto,
+      plunge: c.plunge, passDepth: lastPlan.ap, stepover: cut.stepover, d: tool.d,
+      chip: Math.round(c.chip * 1000) / 1000, rec: c.rec, depth: state.depth,
+    };
+    $("chip-line").innerHTML = `Chipload <b>${num(c.chip, 3)}</b> mm/tand · rätt för materialet <b>${num(c.rec, 3)}</b>${cut.chipSource === "calc" ? " (beräknad)" : ""}`;
+    const savedHere = findSaved(tool.code, state.material);
+    const view = Object.assign({}, current, { toolNo: savedHere ? savedHere.toolNo : "" });
+    const info = [tool.group, tool.len ? `skärlängd ${num(tool.len)} mm` : "", tool.dlc ? "DLC-belagd" : ""].filter(Boolean).join(" · ");
+    let tip = "";
+    if (tool.vtype === 5) tip = `<p class="note">Saknar din Aspire typen Tapered Ball Nose? Välj Ball Nose med diameter ${aspNum(tool.radius * 2)} mm (två gånger spetsradien).</p>`;
+    $("aspire").innerHTML =
+      `<div class="asp-head"><h3>Inmatning i Aspire 8.5</h3><span class="asp-toast" role="status" data-idle="Tryck på ett värde för att kopiera">Tryck på ett värde för att kopiera</span></div>` +
+      `<p class="asp-info">${TOOL_SVG[tool.type]}<span>${info}</span></p>` + aspireHTML(view) + tip;
 
     // Mobilfot
     $("dock-feed").textContent = num(c.feed, 0);
     $("dock-sub").textContent = `${num(c.chip, 3)} mm/tand · ${["för lite", "rätt", "för mycket"][zone]}`;
     $("dock-mark").style.left = (pos * 100).toFixed(1) + "%";
 
-    lastCopy = [
-      `${mat.full}, ${tool.code} (${toolShort(tool)}, ${tool.flutes} skär)`,
-      `Matning: ${num(c.feed, 0)} mm/min`,
-      `Nedmatning: ${num(c.plunge, 0)} mm/min`,
-      `Varvtal: ${num(state.rpm, 0)} rpm`,
-      `Skärdjup per pass: ${num(lastPlan.ap, 2)} mm`,
-      `Stegöver: ${num(cut.stepover, 2)} mm`,
+    lastCopy = aspireText(view) + "\n" + [
       `Chipload: ${num(c.chip, 3)} mm/tand (rätt: ${num(c.rec, 3)})`,
       `Djup ${num(lastPlan.total, 1)} mm: ${lastPlan.passes} pass à ${num(lastPlan.perPass, 2)} mm`,
     ].join("\n");
-
-    current = {
-      material: state.material, code: tool.code, rpm: state.rpm, feed: c.feed, feedAuto: state.feedAuto,
-      plunge: c.plunge, passDepth: lastPlan.ap, stepover: cut.stepover, d: tool.d,
-      chip: Math.round(c.chip * 1000) / 1000, rec: c.rec, depth: state.depth,
-    };
   }
   let current = null;
 
@@ -1047,7 +1037,8 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
   bindInput("depth", (v) => { state.depth = clamp(Math.round(v * 10) / 10, 0.1, 100); });
 
   function copyText(text, toast) {
-    const done = () => { toast.textContent = "Kopierat"; setTimeout(() => (toast.textContent = ""), 1800); };
+    const idle = toast.dataset.idle || "";
+    const done = () => { toast.textContent = text.length < 40 && !text.includes("\n") ? `Kopierat: ${text}` : "Kopierat"; setTimeout(() => (toast.textContent = idle), 1800); };
     const fallback = () => {
       const ta = el("textarea", { style: "position:fixed;opacity:0" }); ta.value = text; document.body.appendChild(ta); ta.select();
       try { document.execCommand("copy"); done(); } catch (e) { toast.textContent = "Kunde inte kopiera"; }
@@ -1057,6 +1048,14 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
     else fallback();
   }
   $("copy").addEventListener("click", () => copyText(lastCopy, $("toast")));
+  // Tryck på ett Aspire-värde för att kopiera just det
+  document.addEventListener("click", (e) => {
+    const v = e.target.closest(".asp-val[data-copy]");
+    if (!v) return;
+    const box = v.closest(".saved") || v.closest("#result");
+    const toast = box && (box.querySelector(".asp-toast") || box.querySelector(".toast"));
+    if (toast) copyText(v.dataset.copy, toast);
+  });
 
   // ---------- Mina fräsar: sparade inställningar per fräs och material ----------
   const SAVED_KEY = "frasmatning.saved.v1";
@@ -1071,25 +1070,66 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
 
   function updateSavedCount() { $("saved-count").textContent = saved.length; }
 
-  // Siffror som de skrivs in i Aspire: utan mellanslag för tusental
-  const plain = (v, d) => new Intl.NumberFormat("sv-SE", { useGrouping: false, minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
-  function aspireRows(x) {
-    const t = TOOLS.find((y) => y.code === x.code);
-    const pctOk = t && ["upcut", "downcut", "compression", "straight", "ball", "surfacing", "flush", "pcb"].includes(t.type);
-    const pct = pctOk && x.d ? ` (${plain((x.stepover / x.d) * 100, 0)} %)` : "";
+  // ---------- Aspire 8.5: samma fält, ordning och talformat som verktygsdialogen ----------
+  const ASP_TYPE = { 1: "End Mill", 2: "Ball Nose", 4: "V-Bit", 5: "Tapered Ball Nose" };
+  // Punkt som decimaltecken och minst en decimal, som Aspire visar talen (1.0, 2400.0)
+  function aspNum(v, dec) {
+    if (v == null || isNaN(v)) return "";
+    const f = Math.pow(10, dec == null ? 3 : dec);
+    let out = String(Math.round(v * f) / f);
+    if (!out.includes(".")) out += ".0";
+    return out;
+  }
+  function aspireModel(x) {
+    const t = TOOLS.find((y) => y.code === x.code) || {};
+    const geo = [];
+    if (t.vtype === 5) {
+      geo.push(["Tip Radius (R)", [[aspNum(t.radius), "mm"]]]);
+      geo.push(["Diameter (D)", [[aspNum(t.d), "mm"]]]);
+      if (t.angle) geo.push(["Angle (A)", [[aspNum(t.angle, 1), "°"]]]);
+    } else {
+      geo.push(["Diameter (D)", [[aspNum(t.d), "mm"]]]);
+      if (t.vtype === 4) {
+        geo.push(["Angle (A)", [[aspNum(t.angle, 1), "°"]]]);
+        if (t.tip) geo.push(["Flat Diameter (F)", [[aspNum(t.tip), "mm"]]]);
+      }
+    }
+    const pct = t.d ? aspNum((x.stepover / t.d) * 100, 1) : "";
     return [
-      ["Pass Depth", "skärdjup", `${plain(x.passDepth, 2)} mm`],
-      ["Stepover", "stegöver", `${plain(x.stepover, 2)} mm${pct}`],
-      ["Spindle Speed", "varvtal", `${plain(x.rpm, 0)} r.p.m.`],
-      ["Feed Rate", "matning", `${plain(x.feed, 0)} mm/min`],
-      ["Plunge Rate", "nedmatning", `${plain(x.plunge, 0)} mm/min`],
-    ].concat(x.toolNo ? [["Tool Number", "verktygsnr", x.toolNo]] : []);
+      ["Tool Info", [
+        ["Name", [[x.code, ""]]],
+        ["Tool Type", [[ASP_TYPE[t.vtype] || "End Mill", ""]]],
+        ["Notes", [[matName(x.material) + (x.note ? `, ${x.note}` : ""), ""]]],
+      ]],
+      ["Geometry", geo],
+      ["Cutting Parameters", [
+        ["Pass Depth", [[aspNum(x.passDepth, 2), "mm"]]],
+        ["Stepover", [[aspNum(x.stepover, 3), "mm"], [pct, "%"]]],
+      ]],
+      ["Feeds and Speeds", [
+        ["Spindle Speed", [[String(Math.round(x.rpm)), "r.p.m"]]],
+        ["Feed Rate", [[aspNum(x.feed, 0), "mm/min"]]],
+        ["Plunge Rate", [[aspNum(x.plunge, 0), "mm/min"]]],
+      ]],
+      ["Tool Number", [["Tool Number", [[x.toolNo || "", ""]]]]],
+    ];
+  }
+  function aspireHTML(x) {
+    return aspireModel(x).map(([title, rows]) => `<section class="asp-group">` +
+      (title !== "Tool Number" ? `<h4>${title}</h4>` : "") +
+      rows.map(([label, vals]) => `<div class="asp-row${title === "Tool Number" ? " strong" : ""}"><span class="asp-k">${label}</span><span class="asp-vals">` +
+        vals.map(([v, u]) => (v !== ""
+          ? `<button type="button" class="asp-val${title === "Tool Info" ? " wide" : ""}" data-copy="${escapeHtml(v)}" aria-label="Kopiera ${label}: ${escapeHtml(v)}">${escapeHtml(v)}</button>`
+          : `<span class="asp-val empty">valfritt</span>`) + (u ? `<span class="asp-unit">${u}</span>` : "")).join("") +
+        `</span></div>`).join("") + `</section>`).join("");
   }
   function aspireText(x) {
-    return [`${x.name} (${x.code}, ${matName(x.material)})`]
-      .concat(aspireRows(x).map(([en, sv, v]) => `${en} (${sv}): ${v}`))
-      .concat(x.note ? [`Anteckning: ${x.note}`] : [])
-      .join("\n");
+    const lines = x.name ? [x.name] : [];
+    aspireModel(x).forEach(([, rows]) => rows.forEach(([label, vals]) => {
+      const v = vals.filter(([val]) => val !== "").map(([val, u]) => (u ? `${val} ${u}` : val)).join(" / ");
+      if (v) lines.push(`${label}: ${v}`);
+    }));
+    return lines.join("\n");
   }
 
   // Spara-formuläret
@@ -1167,7 +1207,7 @@ window.TOOL_DB = {"source":"verkstaden5-vectric-hobby.vtdb","library":"Verkstade
         <div class="saved-top">${t ? TOOL_SVG[t.type] : ""}<h3>${escapeHtml(x.name)}</h3><code>${escapeHtml(x.code)}</code>
           <span class="meta">${escapeHtml(matName(x.material))}${x.toolNo ? ` · verktyg ${escapeHtml(x.toolNo)}` : ""} · sparad ${date}</span></div>
         <div class="saved-feed"><b>${num(x.feed, 0)}</b><span>mm/min matning</span></div>
-        <dl class="aspire">${aspireRows(x).map(([en, sv, v]) => `<div><dt><i>${en}</i> · ${sv}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>
+        <div class="asp">${aspireHTML(x)}</div>
         ${x.note ? `<p class="saved-note">${escapeHtml(x.note)}</p>` : ""}
         <div class="actions">
           <button type="button" class="btn" data-act="load"${t ? "" : " disabled"}>Öppna i kalkylatorn</button>
