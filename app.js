@@ -959,8 +959,16 @@
         if (c === n) continue;
         if (i === 0) score += 0.1 + (c.length - n.length) / 1000;
         else if (i > 0) score += 0.2 + i / 100;
-        else if (terms.length === 1 && n.length >= 4) score += 0.5 + dist(n, c.slice(0, n.length)) / n.length;
-        else return null;
+        else if (terms.length === 1 && n.length >= 4) {
+          // Delar mellan bindestrecken: "UC-DLC-1F-D4.0" hittar "UC-AL-DLC-1F-D4.0-…" fast ett led saknas
+          const canon = (x) => x.replace(/°/g, "").replace(/(\d)\.0+$/, "$1");
+          const qp = n.split("-").filter(Boolean).map(canon), cp = c.split("-").map(canon);
+          const hits = qp.filter((x) => cp.includes(x)).length;
+          const partScore = qp.length >= 2 ? 0.3 + (1 - hits / qp.length) * 1.5 : 9;
+          const whole = 0.5 + dist(n, c) / Math.max(n.length, c.length) * 2;
+          const prefix = 0.5 + dist(n, c.slice(0, n.length)) / n.length;
+          score += Math.min(partScore, whole, prefix);
+        } else return null;
       }
       return { t, score: score / terms.length };
     }).filter((r) => r && r.score < 0.85).sort((a, b) => a.score - b.score).slice(0, 6);
@@ -973,7 +981,9 @@
   function applyTool(t) {
     let matNote = "";
     if (!t.cuts[state.material]) {
-      const m = MATERIALS.find((x) => t.cuts[x.id]);
+      // Fräsens eget material först (aluminiumfräs -> aluminium), annars första material med data
+      const own = /-AL-/.test(t.code) ? "aluminium" : /^PCB/.test(t.code) ? "fr4" : /^VG-/.test(t.code) ? "acm" : null;
+      const m = MATERIALS.find((x) => x.id === own && t.cuts[x.id]) || MATERIALS.find((x) => t.cuts[x.id]);
       const old = MATERIALS.find((x) => x.id === state.material);
       matNote = ` Den saknar data för ${old.full.toLowerCase()}, så materialet byttes till ${m.full.toLowerCase()}.`;
       state.material = m.id;
