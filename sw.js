@@ -1,11 +1,12 @@
 /* Service worker: appen fungerar offline.
    Egna filer: nätet först (alltid senaste versionen), cache som reserv.
    Typsnitt och OCR-filer från CDN: cachen först, de ändras inte. */
-const VERSION = "frasmatning-v1";
+const VERSION = "frasmatning-v2";
 const SHELL = [
   "./",
   "index.html",
   "app.js",
+  "aspire-tool.js",
   "data/tools.js",
   "manifest.webmanifest",
   "icons/icon-192.png",

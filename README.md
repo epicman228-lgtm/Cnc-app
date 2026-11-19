@@ -32,6 +32,12 @@ skärdjup och stegöver för just den fräsen och materialet (med valfritt verkt
 Menyn *Mina fräsar* visar värdena med Aspires fältnamn (Pass Depth, Stepover, Spindle Speed, Feed Rate,
 Plunge Rate) i samma ordning som i verktygsdialogen. Listan sparas på enheten.
 
+**Export till Aspire / VCarve 8.5 (.tool):** i *Mina fräsar* kan du exportera dina sparade fräsar, eller alla
+fräsar för valt material, till en `.tool`-fil som importeras i Aspires Tool Database. Formatet (en MFC
+CArchive-ström) är kartlagt från en fil exporterad ur Aspire 8.5, se `aspire-tool.js`. Bara verktygstypen
+End Mill stöds än; kulfräs, V-bit och konisk kulfräs har egna klasser som behöver en exempelfil.
+I Claude-vyn sparas filen i en zip.
+
 ## Android-app (.apk)
 
 `dist/frasmatning.apk` är appen som en vanlig Android-app (Android 6 eller nyare). Den fungerar offline

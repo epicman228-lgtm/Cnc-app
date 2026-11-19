@@ -7,6 +7,9 @@ import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.util.Base64;
+import android.webkit.JavascriptInterface;
+import android.widget.Toast;
 import android.view.View;
 import android.view.Window;
 import android.webkit.ValueCallback;
@@ -17,12 +20,15 @@ import android.webkit.WebViewClient;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 /** Visar webbappen (assets/index.html) i en WebView. */
 public class MainActivity extends Activity {
     // Sidan får en https-adress så att localStorage, Web Workers och OCR fungerar som i en webbläsare.
     private static final String BASE = "https://frasmatning.app/";
     private static final int PICK_IMAGE = 1;
+    private static final int SAVE_FILE = 2;
+    private byte[] pendingSave;
 
     private WebView web;
     private ValueCallback<Uri[]> pending;
@@ -74,6 +80,8 @@ public class MainActivity extends Activity {
             }
         });
 
+        web.addJavascriptInterface(new Bridge(), "AndroidBridge");
+
         web.loadDataWithBaseURL(BASE, readAsset("index.html"), "text/html", "utf-8", null);
     }
 
@@ -110,8 +118,50 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Anropas från sidan: window.AndroidBridge.saveFile(namn, base64, mime). */
+    private class Bridge {
+        @JavascriptInterface
+        public void saveFile(final String name, final String base64, final String mime) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() { startSave(name, base64, mime); }
+            });
+        }
+    }
+
+    private void startSave(String name, String base64, String mime) {
+        try {
+            pendingSave = Base64.decode(base64, Base64.DEFAULT);
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType(mime != null && !mime.isEmpty() ? mime : "application/octet-stream");
+            i.putExtra(Intent.EXTRA_TITLE, name);
+            startActivityForResult(i, SAVE_FILE);
+        } catch (Exception e) {
+            pendingSave = null;
+            notifyPage(false);
+        }
+    }
+
+    private void notifyPage(boolean ok) {
+        if (web != null) web.evaluateJavascript("window.onAndroidSaved && window.onAndroidSaved(" + ok + ")", null);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == SAVE_FILE) {
+            boolean ok = false;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingSave != null) {
+                try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                    out.write(pendingSave);
+                    ok = true;
+                } catch (Exception e) { ok = false; }
+            }
+            pendingSave = null;
+            if (resultCode == RESULT_OK) Toast.makeText(this, ok ? "Filen sparades" : "Filen kunde inte sparas", Toast.LENGTH_SHORT).show();
+            notifyPage(ok);
+            return;
+        }
         if (requestCode != PICK_IMAGE || pending == null) return;
         Uri[] result = null;
         if (resultCode == RESULT_OK) {

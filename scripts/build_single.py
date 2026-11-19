@@ -14,7 +14,7 @@ out = Path(args[0]) if args else ROOT / "dist" / "frasmatning.html"
 fragment = "--fragment" in sys.argv
 
 html = (ROOT / "index.html").read_text(encoding="utf-8")
-for src in ("data/tools.js", "app.js"):
+for src in ("data/tools.js", "aspire-tool.js", "app.js"):
     js = (ROOT / src).read_text(encoding="utf-8").replace("</script", "<\\/script")
     html = html.replace(f'<script src="{src}"></script>', f"<script>\n{js}\n</script>")
 

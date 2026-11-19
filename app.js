@@ -628,6 +628,8 @@
   let lastFocus = null;
   function openSheet() {
     lastFocus = document.activeElement;
+    $("export-mat").textContent = matName(state.material).toLowerCase();
+    $("export-note").textContent = "";
     renderSaved();
     sheet.hidden = false;
     document.body.style.overflow = "hidden";
@@ -713,6 +715,117 @@
     }
   });
   updateSavedCount();
+
+  // ---------- Export till Aspire 8.5 (.tool) ----------
+  const isExportable = (t) => t && window.AspireTool && window.AspireTool.supportedVtype(t.vtype);
+  function toolForExport(x) {
+    const t = TOOLS.find((y) => y.code === x.code);
+    return {
+      name: x.code, d: t.d, passDepth: x.passDepth, stepover: x.stepover, feed: x.feed, plunge: x.plunge,
+      rpm: x.rpm, toolNo: x.toolNo || 1,
+      notes: matName(x.material) + (x.note ? `, ${x.note}` : ""),
+      path: matName(x.material),
+    };
+  }
+  function groupsByMaterial(entries) {
+    return MATERIALS.filter((m) => entries.some((x) => x.material === m.id))
+      .map((m) => ({ name: m.full, tools: entries.filter((x) => x.material === m.id).map(toolForExport) }));
+  }
+  // Databasens värden vid databasens varvtal, som kalkylatorn räknar dem
+  function dbEntry(t, material) {
+    const cut = t.cuts[material];
+    const feed = Math.round(cut.chip * t.flutes * cut.rpm);
+    return { code: t.code, material, rpm: cut.rpm, feed, plunge: Math.round(feed * (cut.plunge / cut.feed)),
+      passDepth: cut.stepdown, stepover: cut.stepover, toolNo: "", note: "" };
+  }
+
+  function bytesToBase64(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  // Minimal zip (okomprimerad) för vyer som bara tillåter vissa filtyper
+  const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(b) { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  function zipOne(name, data) {
+    const nm = new TextEncoder().encode(name), crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30)), central = new DataView(new ArrayBuffer(46)), end = new DataView(new ArrayBuffer(22));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, 0, 2], [12, 0x21, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, nm.length, 2], [28, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true)));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, 0, 2], [14, 0x21, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, nm.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, 0, 4]]
+      .forEach(([o, v, n]) => (n === 4 ? central.setUint32(o, v, true) : central.setUint16(o, v, true)));
+    const cdOffset = 30 + nm.length + data.length, cdSize = 46 + nm.length;
+    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, 1, 2], [10, 1, 2], [12, cdSize, 4], [16, cdOffset, 4], [20, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true)));
+    const out = new Uint8Array(cdOffset + cdSize + 22);
+    let p = 0;
+    for (const part of [new Uint8Array(local.buffer), nm, data, new Uint8Array(central.buffer), nm, new Uint8Array(end.buffer)]) { out.set(part, p); p += part.length; }
+    return out;
+  }
+
+  // Spara filen: Android-appen, vanlig webbläsare, eller Claude-vyn (som zip)
+  async function saveToolFile(filename, bytes) {
+    if (window.AndroidBridge && window.AndroidBridge.saveFile) {
+      window.AndroidBridge.saveFile(filename, bytesToBase64(bytes), "application/octet-stream");
+      return "Välj var filen ska sparas.";
+    }
+    if (window.top === window) {
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      const a = el("a", { href: url, download: filename });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      return `Sparade ${filename}.`;
+    }
+    const dl = window.claude && window.claude.use ? await window.claude.use("downloads").catch(() => null) : null;
+    if (!dl) throw { code: "unavailable" };
+    const zipName = filename.replace(/\.tool$/, ".zip");
+    await dl.save({ filename: zipName, data: new Blob([zipOne(filename, bytes)], { type: "application/zip" }) });
+    return `Sparade ${zipName}. Packa upp den och importera ${filename} i Aspire.`;
+  }
+
+  // Alla fräsar för ett material: en grupp per frästyp, sorterade på diameter
+  function groupsByType(entries, material) {
+    const withTool = entries.map((x) => ({ x, t: TOOLS.find((y) => y.code === x.code) }));
+    return TYPES.filter((ty) => withTool.some((e) => e.t.type === ty.id)).map((ty) => ({
+      name: `${matName(material)} · ${ty.label}`,
+      tools: withTool.filter((e) => e.t.type === ty.id).sort((a, b) => a.t.d - b.t.d || (a.t.len || 0) - (b.t.len || 0)).map((e) => {
+        const tool = toolForExport(e.x);
+        tool.path = `${matName(material)} · ${ty.label}`;
+        return tool;
+      }),
+    }));
+  }
+
+  async function exportEntries(entries, filename, grouper) {
+    const note = $("export-note");
+    const ok = entries.filter((x) => isExportable(TOOLS.find((y) => y.code === x.code)));
+    const skipped = entries.length - ok.length;
+    if (!ok.length) {
+      note.textContent = entries.length
+        ? "Inga av fräsarna kan exporteras än. Just nu stöds bara typen End Mill (upcut, downcut, kompression, notfräs, planfräs, PCB- och kopierfräs)."
+        : "Det finns inga fräsar att exportera.";
+      return;
+    }
+    try {
+      const bytes = window.AspireTool.build(grouper ? grouper(ok) : groupsByMaterial(ok));
+      const msg = await saveToolFile(filename, bytes);
+      note.textContent = `${msg} ${ok.length} fräs${ok.length === 1 ? "" : "ar"}.` +
+        (skipped ? ` ${skipped} kulfräs/V-bit/konisk togs inte med, de typerna stöds inte än.` : "");
+    } catch (e) {
+      const code = e && e.code;
+      note.textContent = code === "declined" ? "Exporten avbröts." : "Filen kunde inte sparas här. Prova i Android-appen eller GitHub Pages-versionen.";
+    }
+  }
+
+  window.onAndroidSaved = (ok) => {
+    $("export-note").textContent = ok ? "Filen sparades. Importera den i Aspires Tool Database." : "Filen sparades inte.";
+  };
+  $("export-saved").addEventListener("click", () => exportEntries(saved.slice(), "frasmatning-mina-frasar.tool"));
+  $("export-all").addEventListener("click", () => {
+    const list = TOOLS.filter((t) => t.cuts[state.material] && isExportable(t)).map((t) => dbEntry(t, state.material));
+    const mat = state.material;
+    exportEntries(list, `frasmatning-${mat}.tool`, (ok) => groupsByType(ok, mat));
+  });
 
   $("dock").addEventListener("click", () => $("result").scrollIntoView({ behavior: "smooth", block: "start" }));
   if ("IntersectionObserver" in window) {

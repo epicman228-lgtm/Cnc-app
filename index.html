@@ -337,6 +337,9 @@ h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
 }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sheet-head h2 { font-size: 24px; }
+.export { display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.export h3 { margin: 0; font: 700 16px/1.2 var(--font-display); }
+.export .note:empty { display: none; }
 .saved-filter { display: flex; gap: 6px; flex-wrap: wrap; }
 .saved-filter:empty { display: none; }
 .saved-filter button { min-height: 34px; padding: 0 12px; border-radius: var(--pill); border: 1.5px solid var(--line); background: var(--surface); font-size: 13.5px; }
@@ -536,6 +539,15 @@ footer.src p { margin: 0; }
       <button type="button" class="btn ghost" id="sheet-close">Stäng</button>
     </div>
     <p class="note">Sparade inställningar per fräs och material, med fälten i samma ordning som i Aspires verktygsdialog. De sparas på den här enheten.</p>
+    <div class="export">
+      <h3>Exportera till Aspire / VCarve 8.5</h3>
+      <p class="note">En .tool-fil som du importerar i Aspires verktygsdatabas (Tool Database → Import). Fräsarna hamnar i en grupp per material med samma namn, typ, anteckning och värden som här.</p>
+      <div class="actions">
+        <button type="button" class="btn" id="export-saved">Exportera mina fräsar</button>
+        <button type="button" class="btn ghost" id="export-all">Alla fräsar för <span id="export-mat">materialet</span></button>
+      </div>
+      <p class="note" id="export-note" role="status"></p>
+    </div>
     <div class="saved-filter" id="saved-filter" role="group" aria-label="Filtrera på material"></div>
     <div class="saved-list" id="saved-list"></div>
   </div>
@@ -547,6 +559,7 @@ footer.src p { margin: 0; }
 </button>
 
 <script src="data/tools.js"></script>
+<script src="aspire-tool.js"></script>
 <script src="app.js"></script>
 <!-- pwa -->
 <script>
